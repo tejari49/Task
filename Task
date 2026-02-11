@@ -21,9 +21,9 @@ const CATEGORIES = [
 ];
 
 const PRIORITIES = [
-  { id: 'high', label: 'Wichtig', icon: Flame, color: 'text-red-600 bg-red-50 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900' },
-  { id: 'normal', label: 'Normal', icon: Circle, color: 'text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900' },
-  { id: 'low', label: 'Hat Zeit', icon: Minus, color: 'text-gray-500 bg-gray-50 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700' },
+  { id: 'high', label: 'Wichtig', icon: Flame, color: 'text-red-600 bg-red-50 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-900', activeClass: 'border-red-500 bg-red-50 dark:bg-red-900/20 ring-1' },
+  { id: 'normal', label: 'Normal', icon: Circle, color: 'text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900', activeClass: 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1' },
+  { id: 'low', label: 'Hat Zeit', icon: Minus, color: 'text-gray-500 bg-gray-50 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700', activeClass: 'border-gray-500 bg-gray-50 dark:bg-gray-900/20 ring-1' },
 ];
 
 export default function App() {
@@ -92,7 +92,7 @@ export default function App() {
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
-  // Simulierter Login (Hier Firebase Auth einfügen später)
+  // Simulierter Login mit kurzer Verzögerung (später durch Firebase Auth ersetzen)
   const handleLogin = () => {
       setTimeout(() => {
           setIsAuthenticated(true);
@@ -235,9 +235,19 @@ export default function App() {
   const Avatar = ({ seed, size = "md" }) => {
       const sizeClasses = size === "lg" ? "w-20 h-20" : size === "xl" ? "w-32 h-32" : "w-10 h-10";
       // Dicebear API für Avatare
-      const url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
+      const fallbackLetter = (seed || '?').trim().charAt(0).toUpperCase() || '?';
+      const fallbackSvg = `data:image/svg+xml;utf8,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="100%" height="100%" fill="#e5e7eb"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" font-family="Arial, sans-serif" font-size="32" fill="#6b7280">${fallbackLetter}</text></svg>`)}`;
+      const url = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(seed)}&backgroundColor=b6e3f4,c0aede,d1d4f9`;
       return (
-          <img src={url} alt="Avatar" className={`${sizeClasses} rounded-full bg-gray-100 dark:bg-gray-800 object-cover border-2 border-white dark:border-gray-700 shadow-sm`} />
+          <img
+            src={url}
+            alt="Avatar"
+            className={`${sizeClasses} rounded-full bg-gray-100 dark:bg-gray-800 object-cover border-2 border-white dark:border-gray-700 shadow-sm`}
+            onError={(event) => {
+              event.currentTarget.onerror = null;
+              event.currentTarget.src = fallbackSvg;
+            }}
+          />
       );
   };
 
@@ -447,7 +457,7 @@ export default function App() {
               <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Wichtigkeit</label>
               <div className="flex gap-2">
                 {PRIORITIES.map(prio => (
-                  <button key={prio.id} onClick={() => setNewTaskPriority(prio.id)} className={`flex-1 py-3 rounded-xl border flex flex-col items-center justify-center gap-1 ${newTaskPriority === prio.id ? `border-${prio.color.split('-')[1]}-500 bg-${prio.color.split('-')[1]}-50 dark:bg-${prio.color.split('-')[1]}-900/20 ring-1` : 'border-gray-200 dark:border-gray-800 dark:text-gray-400'}`}>
+                  <button key={prio.id} onClick={() => setNewTaskPriority(prio.id)} className={`flex-1 py-3 rounded-xl border flex flex-col items-center justify-center gap-1 ${newTaskPriority === prio.id ? prio.activeClass : 'border-gray-200 dark:border-gray-800 dark:text-gray-400'}`}>
                     <prio.icon size={20} /> <span className="text-xs">{prio.label}</span>
                   </button>
                 ))}

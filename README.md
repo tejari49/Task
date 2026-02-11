@@ -1,6 +1,6 @@
 # TaskRai
 
-TaskRai ist eine lokale Aufgaben-App (React + Tailwind) mit einer Capacitor-Android-Hülle.
+TaskRai ist eine lokale Aufgaben-App (React + Tailwind) mit einer Capacitor-Android-Hülle. Der Login ist aktuell nur simuliert und dient als Platzhalter für eine spätere Authentifizierung.
 
 ## Entwicklung
 
