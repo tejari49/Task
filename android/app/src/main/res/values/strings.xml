@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TaskRai</string>
+    <string name="title_activity_main">TaskRai</string>
+    <string name="package_name">com.taskrai.app</string>
+    <string name="custom_url_scheme">com.taskrai.app</string>
+</resources>
