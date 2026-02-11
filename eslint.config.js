@@ -24,4 +24,10 @@ export default [
       'react-hooks/static-components': 'off',
     },
   },
+  {
+    files: ['scripts/**/*.js'],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ]

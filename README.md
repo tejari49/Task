@@ -27,7 +27,7 @@ Wenn die Android-App ihre Inhalte **online** laden soll, trage die URL in `capac
   "appName": "TaskRai",
   "webDir": "dist",
   "server": {
-    "url": "https://DEINE-DOMAIN.de",
+    "url": "https://example.com",
     "cleartext": false
   }
 }
