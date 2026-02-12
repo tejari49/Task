@@ -12,6 +12,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   const onNotificationReceivedRef = useRef(null);
   const onTokenReceivedRef = useRef(null);
   const hasInitializedRef = useRef(false);
+  const pushNotificationsRef = useRef(null);
 
   useEffect(() => {
     onNotificationReceivedRef.current = onNotificationReceived;
@@ -22,9 +23,13 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   }, [onTokenReceived]);
 
   const loadPushNotifications = useCallback(async () => {
+    if (pushNotificationsRef.current) {
+      return pushNotificationsRef.current;
+    }
     try {
       const module = await import('@capacitor/push-notifications');
-      return module.PushNotifications;
+      pushNotificationsRef.current = module.PushNotifications;
+      return pushNotificationsRef.current;
     } catch (error) {
       console.error('Capacitor Push Notifications nicht verfügbar:', error);
       return null;
@@ -161,7 +166,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       return;
     }
     hasInitializedRef.current = true;
-    initializePushNotifications();
+    void initializePushNotifications();
   }, [initializePushNotifications]);
 
   // Manuelle Permission Anfrage (für UI Button)
