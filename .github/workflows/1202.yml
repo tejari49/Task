@@ -1,0 +1,74 @@
+name: Build Android Debug APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "master"]
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+
+    env:
+      WORKDIR: Task-copilot-create-final-apk
+
+    steps:
+      - name: 🛒 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🔧 Set up Node.js (Capacitor >= 8 needs Node >= 18)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: ${{ env.WORKDIR }}/package-lock.json
+
+      - name: ☕ Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: 📱 Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: 📦 Install dependencies (npm)
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "[INFO] Installing dependencies"
+          # Fallback if no package-lock.json exists
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: ⚡ Build web assets (Vite -> dist)
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "[INFO] Building web assets"
+          npm run build
+          echo "[INFO] dist content"
+          ls -la dist
+          test -f dist/index.html
+
+      - name: 🌀 Capacitor Android sync
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "[INFO] Syncing capacitor plugins"
+          npx cap sync android
+
+      - name: 🗝️ Make Gradlew executable
+        run: chmod +x ${{ env.WORKDIR }}/android/gradlew
+
+      - name: 🛠️ Build Debug APK
+        working-directory: ${{ env.WORKDIR }}/android
+        run: |
+          echo "[INFO] Building Debug APK"
+          ./gradlew assembleDebug
+
+      - name: 🚚 Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskrai-debug-apk
+          path: ${{ env.WORKDIR }}/android/app/build/outputs/apk/debug/*.apk
