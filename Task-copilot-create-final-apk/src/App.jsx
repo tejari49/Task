@@ -95,7 +95,7 @@ export default function App() {
   const [newSubtaskText, setNewSubtaskText] = useState('');
 
   // Push Notifications State
-  const [_notificationBadge, setNotificationBadge] = useState(0);
+  const [, setNotificationBadge] = useState(0);
   const [lastNotification, setLastNotification] = useState(null);
 
   // Push Notifications Hook
