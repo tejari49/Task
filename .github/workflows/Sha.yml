@@ -1,0 +1,5 @@
+- name: Print signing report (debug/release)
+  run: |
+    cd Task-copilot-create-final-apk/android
+    chmod +x ./gradlew
+    ./gradlew signingReport
