@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { requestFCMToken, onForegroundMessage } from './firebase';
 
 /**
@@ -9,6 +9,16 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   const [token, setToken] = useState(null);
   const [permission, setPermission] = useState('default');
   const [isSupported, setIsSupported] = useState(false);
+  const onNotificationReceivedRef = useRef(onNotificationReceived);
+  const onTokenReceivedRef = useRef(onTokenReceived);
+
+  useEffect(() => {
+    onNotificationReceivedRef.current = onNotificationReceived;
+  }, [onNotificationReceived]);
+
+  useEffect(() => {
+    onTokenReceivedRef.current = onTokenReceived;
+  }, [onTokenReceived]);
 
   const loadPushNotifications = useCallback(async () => {
     try {
@@ -37,8 +47,8 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
         pushNotifications.addListener('registration', (token) => {
           console.log('Android Push Token:', token.value);
           setToken(token.value);
-          if (onTokenReceived) {
-            onTokenReceived(token.value, 'android');
+          if (onTokenReceivedRef.current) {
+            onTokenReceivedRef.current(token.value, 'android');
           }
         });
 
@@ -50,16 +60,16 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
         // Foreground Notification (App ist offen)
         pushNotifications.addListener('pushNotificationReceived', (notification) => {
           console.log('Android Push empfangen (foreground):', notification);
-          if (onNotificationReceived) {
-            onNotificationReceived(notification, 'android');
+          if (onNotificationReceivedRef.current) {
+            onNotificationReceivedRef.current(notification, 'android');
           }
         });
 
         // Notification Click (App wird geöffnet)
         pushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
           console.log('Android Push geklickt:', notification);
-          if (onNotificationReceived) {
-            onNotificationReceived(notification.notification, 'android-click');
+          if (onNotificationReceivedRef.current) {
+            onNotificationReceivedRef.current(notification.notification, 'android-click');
           }
         });
       } else {
@@ -70,7 +80,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       console.error('Fehler bei Android Push Setup:', error);
       setIsSupported(false);
     }
-  }, [onNotificationReceived, onTokenReceived]);
+  }, []);
 
   // Web Push Setup
   const setupWebPush = useCallback(async () => {
@@ -92,8 +102,8 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       if (fcmToken) {
         setToken(fcmToken);
         setPermission('granted');
-        if (onTokenReceived) {
-          onTokenReceived(fcmToken, 'web');
+        if (onTokenReceivedRef.current) {
+          onTokenReceivedRef.current(fcmToken, 'web');
         }
       } else {
         setPermission(Notification.permission);
@@ -103,8 +113,8 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       const unsubscribe = onForegroundMessage((payload) => {
         console.log('Web Push empfangen (foreground):', payload);
         
-        if (onNotificationReceived) {
-          onNotificationReceived({
+        if (onNotificationReceivedRef.current) {
+          onNotificationReceivedRef.current({
             title: payload.notification?.title,
             body: payload.notification?.body,
             data: payload.data
@@ -126,7 +136,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       console.error('Fehler bei Web Push Setup:', error);
       setIsSupported(false);
     }
-  }, [onNotificationReceived, onTokenReceived]);
+  }, []);
 
   const initializePushNotifications = useCallback(async () => {
     // Prüfe ob wir in Capacitor (Android) oder Browser sind
@@ -150,7 +160,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   }, [initializePushNotifications]);
 
   // Manuelle Permission Anfrage (für UI Button)
-  const requestPermission = async () => {
+  const requestPermission = useCallback(async () => {
     const isCapacitor = !!window.Capacitor;
     
     if (isCapacitor) {
@@ -162,7 +172,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       return null;
     }
     return setupWebPush();
-  };
+  }, [loadPushNotifications, setupCapacitorPush, setupWebPush]);
 
   return {
     token,
