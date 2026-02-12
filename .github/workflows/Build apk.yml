@@ -1,0 +1,77 @@
+name: Build Task Copilot APK (Debug)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "master"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      WORKDIR: Task-copilot-create-final-apk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies (npm)
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build web assets (if script exists)
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.build ? 0 : 1)" \
+            && npm run build \
+            || echo "Kein npm script 'build' gefunden – überspringe Web-Build."
+
+      - name: Capacitor sync Android
+        working-directory: ${{ env.WORKDIR }}
+        run: npx cap sync android
+
+      - name: Make Gradlew executable
+        run: chmod +x ${{ env.WORKDIR }}/android/gradlew
+
+      # --- NEW: Signing Report erzeugen (SHA-1 / SHA-256) ---
+      - name: Generate signing report (SHA1/SHA256)
+        working-directory: ${{ env.WORKDIR }}/android
+        run: |
+          ./gradlew signingReport | tee signing-report.txt
+
+      - name: Upload signing report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: signing-report
+          path: ${{ env.WORKDIR }}/android/signing-report.txt
+      # --- /NEW ---
+
+      - name: Build Debug APK
+        working-directory: ${{ env.WORKDIR }}/android
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: task-copilot-debug-apk
+          path: ${{ env.WORKDIR }}/android/app/build/outputs/apk/debug/*.apk
