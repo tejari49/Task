@@ -80,7 +80,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       console.error('Fehler bei Android Push Setup:', error);
       setIsSupported(false);
     }
-  }, [onNotificationReceivedRef, onTokenReceivedRef]);
+  }, []);
 
   // Web Push Setup
   const setupWebPush = useCallback(async () => {
@@ -136,7 +136,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       console.error('Fehler bei Web Push Setup:', error);
       setIsSupported(false);
     }
-  }, [onNotificationReceivedRef, onTokenReceivedRef]);
+  }, []);
 
   const initializePushNotifications = useCallback(async () => {
     // Prüfe ob wir in Capacitor (Android) oder Browser sind
