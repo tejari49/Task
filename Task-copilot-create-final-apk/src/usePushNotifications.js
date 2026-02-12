@@ -31,7 +31,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       pushNotificationsRef.current = module.PushNotifications;
       return pushNotificationsRef.current;
     } catch (error) {
-      console.error('Capacitor Push Notifications nicht verfügbar:', error);
+      console.error('Capacitor push notifications not available:', error);
       return null;
     }
   }, []);
@@ -78,13 +78,16 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
             onNotificationReceivedRef.current(notification.notification, 'android-click');
           }
         });
+        return true;
       } else {
         setPermission('denied');
         console.log('Push Permission verweigert');
+        return false;
       }
     } catch (error) {
       console.error('Fehler bei Android Push Setup:', error);
       setIsSupported(false);
+      return false;
     }
   }, []);
 
@@ -116,7 +119,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       }
 
       // Foreground Messages für Web
-      const unsubscribe = onForegroundMessage((payload) => {
+      onForegroundMessage((payload) => {
         console.log('Web Push empfangen (foreground):', payload);
         
         if (onNotificationReceivedRef.current) {
@@ -137,10 +140,11 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
         }
       });
 
-      return () => unsubscribe();
+      return Notification.permission === 'granted' || Boolean(fcmToken);
     } catch (error) {
       console.error('Fehler bei Web Push Setup:', error);
       setIsSupported(false);
+      return false;
     }
   }, []);
 
@@ -167,7 +171,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     }
     hasInitializedRef.current = true;
     initializePushNotifications().catch((error) => {
-      console.error('Fehler bei Push Initialization:', error);
+      console.error('Push initialization failed:', error);
       setIsSupported(false);
     });
   }, [initializePushNotifications]);
@@ -179,13 +183,12 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     if (isCapacitor) {
       const pushNotifications = await loadPushNotifications();
       if (pushNotifications) {
-        await setupCapacitorPush(pushNotifications);
-        return;
+        return setupCapacitorPush(pushNotifications);
       }
       setIsSupported(false);
-      return;
+      return false;
     }
-    await setupWebPush();
+    return setupWebPush();
   }, [loadPushNotifications, setupCapacitorPush, setupWebPush]);
 
   return {
