@@ -1,4 +1,4 @@
-name: Build Task Copilot APK (Debug)
+name: Build TaskRai APK (Debug)
 
 on:
   workflow_dispatch:
@@ -8,7 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     env:
       WORKDIR: Task-copilot-create-final-apk
 
@@ -19,7 +18,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "20"
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -39,22 +38,50 @@ jobs:
             npm install
           fi
 
-      - name: Build web assets (run build and show output)
+      - name: Build web assets (create ./dist)
         working-directory: ${{ env.WORKDIR }}
         run: |
-          echo "Running npm run build..."
-          npm run build
+          set -e
+          echo "==> repo content"
+          ls -la
 
-          echo "---- after build: ls -la (working directory) ----"
-          ls -la || true
-
-          echo "---- check dist: ----"
-          if [ -d dist ]; then
-            ls -la dist || true
+          # 1) If a build script exists, run it (Vite/React/Angular/etc.)
+          if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.build ? 0 : 1)"; then
+            echo "==> npm run build"
+            npm run build
           else
-            echo "dist directory not found"
-            echo "Contents of working dir:" && ls -la
+            echo "==> Kein npm script 'build' gefunden – baue dist als Fallback."
           fi
+
+          # 2) Hard guarantee: Capacitor needs webDir (often 'dist') with an index.html.
+          mkdir -p dist
+
+          # If build did not generate dist/index.html, create a minimal dist from existing sources.
+          if [ ! -f dist/index.html ]; then
+            echo "==> dist/index.html fehlt – erstelle Fallback index.html"
+
+            # Prefer Vite-style root index.html
+            if [ -f index.html ]; then
+              cp index.html dist/index.html
+            # Or single-file app variant
+            elif [ -f TimeRoster.html ]; then
+              cp TimeRoster.html dist/index.html
+            # Or static web root
+            elif [ -f public/index.html ]; then
+              cp public/index.html dist/index.html
+            else
+              echo "ERROR: Keine index.html/TimeRoster.html gefunden. Lege eine index.html an oder setze webDir korrekt."
+              exit 1
+            fi
+          fi
+
+          # Copy common static assets if present (service worker MUST be at web root)
+          if [ -d public ]; then
+            cp -R public/* dist/ || true
+          fi
+
+          echo "==> dist content"
+          ls -la dist
 
       - name: Capacitor sync Android
         working-directory: ${{ env.WORKDIR }}
@@ -63,19 +90,6 @@ jobs:
       - name: Make Gradlew executable
         run: chmod +x ${{ env.WORKDIR }}/android/gradlew
 
-      # --- NEW: Signing Report erzeugen (SHA-1 / SHA-256) ---
-      - name: Generate signing report (SHA1/SHA256)
-        working-directory: ${{ env.WORKDIR }}/android
-        run: |
-          ./gradlew signingReport | tee signing-report.txt
-
-      - name: Upload signing report artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: signing-report
-          path: ${{ env.WORKDIR }}/android/signing-report.txt
-      # --- /NEW ---
-
       - name: Build Debug APK
         working-directory: ${{ env.WORKDIR }}/android
         run: ./gradlew assembleDebug
@@ -83,5 +97,5 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: task-copilot-debug-apk
+          name: taskrai-debug-apk
           path: ${{ env.WORKDIR }}/android/app/build/outputs/apk/debug/*.apk
