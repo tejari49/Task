@@ -13,7 +13,7 @@
 ## ⚙️ Schritt 0: Firebase Credentials eintragen
 
 1. Kopiere `.env.example` zu `.env.local` und trage deine Firebase-Werte ein.
-2. Öffne `public/firebase-messaging-sw.js` und ersetze die Platzhalter (`YOUR_FIREBASE_*`) durch dieselben Werte.
+2. Öffne `public/firebase-messaging-sw.js` und ersetze die Platzhalter (`VITE_FIREBASE_*`) durch dieselben Werte.
 
 ---
 
