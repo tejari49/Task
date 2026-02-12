@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "99376901660",
+    "project_id": "task-rai",
+    "storage_bucket": "task-rai.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:99376901660:android:853c4f54be3b5e0e8d79d9",
+        "android_client_info": {
+          "package_name": "com.irajet.task"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "99376901660-4su6836vocq97tj87rgibkpkj512hgsd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDMYgxeL7x8J0ceT4yYduhnjYn12CpnRWY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "99376901660-4su6836vocq97tj87rgibkpkj512hgsd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

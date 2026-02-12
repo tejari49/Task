@@ -1,4 +1,4 @@
-package com.getcapacitor.myapp;
+package com.irajet.task;
 
 import static org.junit.Assert.*;
 

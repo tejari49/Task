@@ -39,6 +39,10 @@ npm run dev
 
 Hinweis: Für eine gehostete Web-Version musst du die Domain unter **Authentication → Settings → Authorized domains** eintragen.
 
+### Android Firebase (google-services.json)
+
+Lege die bereitgestellte `google-services.json` unter `android/app/google-services.json` ab, damit Google Sign-In für die APK funktioniert.
+
 ## Online verwenden
 
 Für die Web-Version (im Browser) brauchst du nur ein Hosting für das `dist/`-Verzeichnis:
@@ -53,7 +57,7 @@ Wenn die Android-App ihre Inhalte **online** laden soll, trage die URL in `capac
 
 ```json
 {
-  "appId": "com.taskrai.app",
+  "appId": "com.irajet.task",
   "appName": "TaskRai",
   "webDir": "dist",
   "server": {

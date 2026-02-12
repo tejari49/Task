@@ -1,4 +1,4 @@
-package com.taskrai.app;
+package com.irajet.task;
 
 import com.getcapacitor.BridgeActivity;
 
