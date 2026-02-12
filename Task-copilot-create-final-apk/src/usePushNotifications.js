@@ -164,10 +164,16 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
 
     if (isCapacitor && pushNotifications) {
       // === ANDROID (CAPACITOR) ===
-      await setupCapacitorPush(pushNotifications);
+      const permissionGranted = await setupCapacitorPush(pushNotifications);
+      if (!permissionGranted) {
+        console.log('Push permission not granted (android).');
+      }
     } else if ('Notification' in window && 'serviceWorker' in navigator) {
       // === WEB (BROWSER) ===
-      await setupWebPush();
+      const permissionGranted = await setupWebPush();
+      if (!permissionGranted) {
+        console.log('Push permission not granted (web).');
+      }
     } else {
       console.log('Push Notifications werden nicht unterstützt');
       setIsSupported(false);
@@ -187,6 +193,12 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   useEffect(() => {
     return () => clearForegroundSubscription();
   }, [clearForegroundSubscription]);
+
+  useEffect(() => {
+    return () => {
+      initializationPromiseRef.current = null;
+    };
+  }, []);
 
   // Manuelle Permission Anfrage (für UI Button)
   const requestPermission = useCallback(async () => {
