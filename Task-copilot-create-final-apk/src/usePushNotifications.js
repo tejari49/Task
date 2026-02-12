@@ -9,8 +9,9 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   const [token, setToken] = useState(null);
   const [permission, setPermission] = useState('default');
   const [isSupported, setIsSupported] = useState(false);
-  const onNotificationReceivedRef = useRef(onNotificationReceived);
-  const onTokenReceivedRef = useRef(onTokenReceived);
+  const onNotificationReceivedRef = useRef(null);
+  const onTokenReceivedRef = useRef(null);
+  const hasInitializedRef = useRef(false);
 
   useEffect(() => {
     onNotificationReceivedRef.current = onNotificationReceived;
@@ -156,6 +157,10 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   }, [loadPushNotifications, setupCapacitorPush, setupWebPush]);
 
   useEffect(() => {
+    if (hasInitializedRef.current) {
+      return;
+    }
+    hasInitializedRef.current = true;
     initializePushNotifications();
   }, [initializePushNotifications]);
 
