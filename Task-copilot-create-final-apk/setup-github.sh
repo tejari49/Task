@@ -104,13 +104,12 @@ git branch -M main
 echo ""
 echo "Füge Dateien hinzu..."
 git add .
-git commit -m "Initial commit: TaskRai with FCM and GitHub Actions
-
-- Google Login (Web + Android)
-- Push Notifications (FCM)
-- Task Management
-- GitHub Actions workflows
-- Full documentation"
+git commit -m "Initial commit: TaskRai with FCM and GitHub Actions" \
+  -m "- Google Login (Web + Android)" \
+  -m "- Push Notifications (FCM)" \
+  -m "- Task Management" \
+  -m "- GitHub Actions workflows" \
+  -m "- Full documentation"
 
 echo -e "${GREEN}✅ Initial commit erstellt${NC}"
 echo ""
