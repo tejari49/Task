@@ -1,114 +1,78 @@
-name: Build Android APK (with native GoogleAuth checks)
+name: Build APK (Debug)
 
 on:
   workflow_dispatch:
   push:
-    branches:
-      - main
+    branches: ["main", "master"]
 
 jobs:
-  build-apk:
-    name: Build Android APK
+  build:
     runs-on: ubuntu-latest
     env:
-      NODE_VERSION: '20'
-      GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx3g'
+      WORKDIR: Task-copilot-create-final-apk
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Set up Node.js
+      - name: Set up Node.js (>=22 required by Capacitor)
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: ${{ env.WORKDIR }}/package-lock.json
 
-      - name: Set up Java (for Android build)
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: "temurin"
+          java-version: "21"
 
-      - name: Ensure android/google-services.json (from secret)
-        id: ensure-google-services
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies (npm)
+        working-directory: ${{ env.WORKDIR }}
         run: |
-          set -e
-          if [ -f android/app/google-services.json ]; then
-            echo "google-services.json already in repo under android/app/"
-            echo "present=true" >> $GITHUB_OUTPUT
+          echo "[INFO] Installing dependencies"
+          if [ -f package-lock.json ]; then
+            npm ci
           else
-            if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
-              echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 --decode > android/app/google-services.json
-              echo "present=true" >> $GITHUB_OUTPUT
-            else
-              echo "present=false" >> $GITHUB_OUTPUT
-            fi
+            npm install
           fi
 
-      - name: Fail early if google-services.json missing
-        if: steps.ensure-google-services.outputs.present == 'false'
+      - name: Build web assets (Vite -> dist)
+        working-directory: ${{ env.WORKDIR }}
         run: |
-          echo "::error::android/app/google-services.json not found. Add it to the repo or add a base64-encoded GOOGLE_SERVICES_JSON secret."
-          exit 1
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Ensure native GoogleAuth plugin installed (if not declared)
-        run: |
-          set -e
-          if ! grep -q "@codetrix-studio/capacitor-google-auth" package.json; then
-            echo "Temporarily installing @codetrix-studio/capacitor-google-auth..."
-            npm install @codetrix-studio/capacitor-google-auth --no-save
-          else
-            echo "Plugin present in package.json"
-          fi
-          node -e "try{console.log('plugin-version:',require('./package.json').dependencies['@codetrix-studio/capacitor-google-auth']||'not-declared')}catch(e){console.log('package.json read error',e)}"
-
-      - name: Run npx cap sync android
-        env:
-          VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GOOGLE_OAUTH_CLIENT_ID }}
-        run: |
-          set -e
-          npx cap sync android
-
-      - name: Build web assets (Vite) and Android (Gradle assemble)
-        env:
-          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
-          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
-          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
-          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
-          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
-          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
-        run: |
-          set -e
+          echo "[INFO] Building web assets"
           npm run build
-          cd android
-          chmod +x ./gradlew
-          ./gradlew assembleDebug -Pandroid.testOnly=false
+          echo "[INFO] dist content"
+          ls -la dist
+          test -f dist/index.html
 
-      - name: Find APK artifact
-        id: find-apk
+      - name: Capacitor sync Android
+        working-directory: ${{ env.WORKDIR }}
         run: |
-          set -e
-          APK_PATH=$(find android -type f -name "*-debug.apk" | head -n 1 || true)
-          if [ -z "$APK_PATH" ]; then
-            echo "::error::APK not found in expected locations"
-            ls -la android/app/build/outputs || true
-            exit 1
-          fi
-          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+          echo "[INFO] Capacitor sync android"
+          npx cap sync android || { echo "::error::Capacitor sync failed"; exit 1; }
 
-      - name: Upload APK artifact
+      - name: Make Gradlew executable
+        run: chmod +x ${{ env.WORKDIR }}/android/gradlew
+
+      - name: Build Debug APK
+        working-directory: ${{ env.WORKDIR }}/android
+        run: |
+          echo "[INFO] Building debug APK"
+          ./gradlew assembleDebug || { echo "::error::Gradle build failed"; exit 1; }
+
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: taskrai-apk
-          path: ${{ steps.find-apk.outputs.apk_path }}
+          name: taskrai-debug-apk
+          path: ${{ env.WORKDIR }}/android/app/build/outputs/apk/debug/*.apk
 
-      - name: Note about plugin & config
-        if: ${{ always() }}
+      - name: 🎯 Show APK path & plugins
         run: |
-          echo "If you still get auth/cancelled-popup-request, ensure native plugin is present on device and SHA-1 + google-services.json are configured in Firebase."
+          echo "[INFO] APK should be in ${{ env.WORKDIR }}/android/app/build/outputs/apk/debug/"
+          echo "[INFO] Capacitor plugins (from package.json):"
+          cat ${{ env.WORKDIR }}/package.json | grep capacitor
