@@ -1,6 +1,6 @@
 # TaskRai
 
-TaskRai ist eine lokale Aufgaben-App (React + Tailwind) mit einer Capacitor-Android-Hülle. Der Login ist aktuell nur simuliert und dient als Platzhalter für eine spätere Authentifizierung.
+TaskRai ist eine lokale Aufgaben-App (React + Tailwind) mit einer Capacitor-Android-Hülle. Der Login ist per Firebase Auth vorgesehen und braucht einmalige Konfiguration.
 
 ## Entwicklung
 
@@ -8,6 +8,36 @@ TaskRai ist eine lokale Aufgaben-App (React + Tailwind) mit einer Capacitor-Andr
 npm install
 npm run dev
 ```
+
+## Firebase Login einrichten
+
+1. Firebase-Projekt anlegen: https://console.firebase.google.com
+2. **Authentication → Sign-in method**: Google aktivieren.
+3. **Project settings → General**: Web-App hinzufügen und die Config-Daten notieren.
+4. `.env.local` im Repo anlegen (Vorlage: `.env.example`):
+
+```bash
+cp .env.example .env.local
+```
+
+Dann die Werte eintragen:
+
+```
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+```
+
+5. Dev-Server neu starten:
+
+```bash
+npm run dev
+```
+
+Hinweis: Für eine gehostete Web-Version musst du die Domain unter **Authentication → Settings → Authorized domains** eintragen.
 
 ## Online verwenden
 

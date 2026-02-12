@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Calendar, CheckCircle2, Circle, Plus, Trash2, 
   User, Users, Share2, X, Home, Briefcase, 
@@ -7,6 +7,8 @@ import {
   Repeat, MessageSquare, Send, Check, ListTodo, 
   Settings, Fingerprint, LogOut, ShieldCheck, Smartphone
 } from 'lucide-react';
+import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { auth, googleProvider, isFirebaseConfigured } from './firebase';
 
 // --- KATEGORIEN KONFIGURATION ---
 const CATEGORIES = [
@@ -25,6 +27,12 @@ const PRIORITIES = [
   { id: 'normal', label: 'Normal', icon: Circle, color: 'text-blue-600 bg-blue-50 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-900', activeClass: 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 ring-1' },
   { id: 'low', label: 'Hat Zeit', icon: Minus, color: 'text-gray-500 bg-gray-50 border-gray-200 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-700', activeClass: 'border-gray-500 bg-gray-50 dark:bg-gray-900/20 ring-1' },
 ];
+
+const DEFAULT_PROFILE = {
+  name: 'Max Mustermann',
+  id: 'USER-8291',
+  email: 'max@beispiel.de',
+};
 
 export default function App() {
   // --- STATE MANAGEMENT ---
@@ -47,11 +55,8 @@ export default function App() {
   const [lastCompletedDate, setLastCompletedDate] = useState(null);
   
   // User Profil State
-  const [userProfile, setUserProfile] = useState({ 
-    name: 'Max Mustermann', 
-    id: 'USER-8291',
-    email: 'max@beispiel.de'
-  });
+  const [userProfile, setUserProfile] = useState(DEFAULT_PROFILE);
+  const [authError, setAuthError] = useState('');
 
   // Daten (Simuliert)
   const [friends, setFriends] = useState([
@@ -92,16 +97,50 @@ export default function App() {
 
   const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
-  // Simulierter Login mit kurzer Verzögerung (später durch Firebase Auth ersetzen)
-  const handleLogin = () => {
-      setTimeout(() => {
-          setIsAuthenticated(true);
-      }, 800);
+  useEffect(() => {
+    if (!isFirebaseConfigured || !auth) return;
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsAuthenticated(true);
+        setUserProfile({
+          name: user.displayName || user.email?.split('@')[0] || 'TaskRai Nutzer',
+          id: user.uid,
+          email: user.email || '',
+        });
+      } else {
+        setIsAuthenticated(false);
+        setUserProfile(DEFAULT_PROFILE);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleLogin = async () => {
+    setAuthError('');
+    if (!isFirebaseConfigured || !auth || !googleProvider) {
+      setAuthError('Firebase ist nicht konfiguriert.');
+      return;
+    }
+    try {
+      await signInWithPopup(auth, googleProvider);
+    } catch {
+      setAuthError('Anmeldung fehlgeschlagen.');
+    }
   };
 
-  const handleLogout = () => {
-      setIsAuthenticated(false);
+  const handleLogout = async () => {
+    setAuthError('');
+    try {
+      if (auth) {
+        await signOut(auth);
+      } else {
+        setIsAuthenticated(false);
+      }
+    } catch {
+      setAuthError('Abmeldung fehlgeschlagen.');
+    } finally {
       setCurrentView('dashboard');
+    }
   };
 
   const groupTasksByDate = (taskList) => {
@@ -324,6 +363,7 @@ export default function App() {
                       <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6 group-hover:scale-110 transition-transform" alt="Google" />
                       <span className="font-semibold text-gray-700 dark:text-white">Mit Google anmelden</span>
                   </button>
+                  {authError && <p className="text-xs text-center text-red-500">{authError}</p>}
                   <p className="text-xs text-center text-gray-400 mt-6 max-w-xs mx-auto">Mit der Anmeldung akzeptierst du unsere Nutzungsbedingungen.</p>
               </div>
           </div>
