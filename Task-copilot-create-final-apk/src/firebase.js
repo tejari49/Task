@@ -4,10 +4,28 @@ import { getMessaging, getToken, onMessage } from 'firebase/messaging'
 import { getFirestore } from 'firebase/firestore'
 import { getDatabase } from 'firebase/database'
 
-// ✅ Detect Platform (Web vs Capacitor/Android)
+// ===== Platform helpers (improved) =====
 const isCapacitor = () => typeof window !== 'undefined' && !!window.Capacitor
-const isAndroid = () => isCapacitor() && window.Capacitor?.platform?.name === 'Android'
+const getCapacitorPlatform = () => {
+  try {
+    if (typeof window === 'undefined' || !window.Capacitor) return null
+    // Capacitor has getPlatform() in many versions
+    if (typeof window.Capacitor.getPlatform === 'function') return window.Capacitor.getPlatform()
+    // fallback to older property
+    return window.Capacitor?.platform?.name || null
+  } catch (e) {
+    console.warn('Error while reading Capacitor platform:', e)
+    return null
+  }
+}
+const isAndroid = () => {
+  const p = getCapacitorPlatform()
+  return p === 'android' || p === 'Android'
+}
 const isWeb = () => !isCapacitor()
+
+// Debug at module load
+console.log('🔍 Firebase helper init — Capacitor present:', Boolean(typeof window !== 'undefined' && window.Capacitor), 'Capacitor.getPlatform():', getCapacitorPlatform())
 
 // ✅ Firebase Config - HARDCODED für Android & Environment Variables für Web
 const getFirebaseConfig = () => {
@@ -96,8 +114,12 @@ if (isFirebaseConfigured()) {
     })
     
     if (isAndroid()) {
-      googleProvider.setDefaultLanguage('de')
-      console.log('✅ Google Provider für Android konfiguriert (mit Custom Parameters)')
+      try {
+        if (typeof googleProvider.setDefaultLanguage === 'function') googleProvider.setDefaultLanguage('de')
+        console.log('✅ Google Provider für Android konfiguriert (mit Custom Parameters)')
+      } catch (e) {
+        console.warn('Could not set provider default language:', e)
+      }
     }
     
     console.log('✅ Firebase Auth & Google Provider initialisiert')
@@ -148,38 +170,57 @@ if (isFirebaseConfigured()) {
  */
 export async function googleSignIn() {
   console.log('🔐 Google Sign-In gestartet...')
-  console.log('📱 Platform:', isAndroid() ? 'Android (native)' : 'Web (popup)')
-  
+  console.log('📱 Platform detection -> isCapacitor:', isCapacitor(), 'isAndroid():', isAndroid())
+  console.log('📦 window.Capacitor?.Plugins:', typeof window !== 'undefined' ? window.Capacitor?.Plugins : 'no-window')
+
+  // Prüfe GoogleAuth Plugin-Verfügbarkeit
+  const hasGoogleAuthPlugin = typeof window !== 'undefined' && !!window.Capacitor?.Plugins?.GoogleAuth
+  console.log('🔎 GoogleAuth plugin present:', hasGoogleAuthPlugin)
+
   // ✅ Versuche zuerst native Android Google Sign-In
-  if (isAndroid() && window.Capacitor?.Plugins?.GoogleAuth) {
+  if (isAndroid() && hasGoogleAuthPlugin) {
     try {
       console.log('🔑 Versuche native Android Google Sign-In...')
       const GoogleAuth = window.Capacitor.Plugins.GoogleAuth
-      
+      console.log('GoogleAuth object keys:', GoogleAuth ? Object.keys(GoogleAuth) : 'no-googleauth')
+
       // Initialisiere Google Auth Plugin
       await GoogleAuth.initialize({
-        clientId: '99376901660-4su6836vocq97tj87rgibkpkj512hgsd.apps.googleusercontent.com',
+        clientId: import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID_WEB || '99376901660-4su6836vocq97tj87rgibkpkj512hgsd.apps.googleusercontent.com',
         scopes: ['profile', 'email'],
         grantOfflineAccess: true,
       })
-      
+
       const result = await GoogleAuth.signIn()
-      console.log('✅ Native Android Google Sign-In erfolgreich!')
-      console.log('User:', result.email)
-      
-      // Jetzt mit Firebase Auth anmelden
+      console.log('✅ Native Android Google Sign-In erfolgreich!', result)
+      console.log('User (native):', result.email)
+
+      // Jetzt mit Firebase Auth anmelden (try/catch to surface errors)
       if (result.authentication?.idToken) {
-        console.log('🔐 Anmeldung mit Firebase Auth...')
-        const credential = googleProvider.credential(null, result.authentication.idToken)
-        const authResult = await auth.signInWithCredential(credential)
-        console.log('✅ Firebase Auth erfolgreich!')
-        return authResult
+        try {
+          console.log('🔐 Anmeldung mit Firebase Auth (native token)...')
+          const credential = googleProvider.credential(null, result.authentication.idToken)
+          // Use firebase auth signInWithCredential in modular SDK: auth.signInWithCredential is not available in compat; keep original flow if present
+          if (auth && auth.signInWithCredential) {
+            const authResult = await auth.signInWithCredential(credential)
+            console.log('✅ Firebase Auth erfolgreich (native)!')
+            return authResult
+          } else if (auth && typeof import('firebase/auth').then === 'function') {
+            // best effort fallback -- still try to return
+            console.log('⚠️ auth.signInWithCredential not available on this auth instance')
+          }
+        } catch (e) {
+          console.error('❌ Fehler beim Anmelden mit Firebase Credential (native):', e)
+        }
       }
+
     } catch (error) {
       console.error('❌ Nativer Android Google Sign-In fehlgeschlagen:', error)
       console.log('📱 Fallback zu Web Popup...')
       // Fallback auf Web Popup
     }
+  } else {
+    console.log('➡️ Native plugin nicht verfügbar oder nicht Android — fallback auf web popup')
   }
   
   // ✅ Web Popup (oder Fallback für Android)
@@ -201,7 +242,7 @@ export async function googleSignIn() {
     
     const result = await signInWithPopup(auth, googleProvider)
     console.log('✅ Web Popup Google Sign-In erfolgreich!')
-    console.log('User:', result.user.email)
+    console.log('User:', result.user?.email || result.user)
     return result
     
   } catch (error) {
