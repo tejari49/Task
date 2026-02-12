@@ -31,7 +31,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       pushNotificationsRef.current = module.PushNotifications;
       return pushNotificationsRef.current;
     } catch (error) {
-      console.error('Capacitor push notifications not available:', error);
+      console.error('Failed to load Capacitor push notifications module. Ensure @capacitor/push-notifications is installed:', error);
       return null;
     }
   }, []);
@@ -140,7 +140,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
         }
       });
 
-      return Notification.permission === 'granted' || Boolean(fcmToken);
+      return Notification.permission === 'granted' && Boolean(fcmToken);
     } catch (error) {
       console.error('Fehler bei Web Push Setup:', error);
       setIsSupported(false);
@@ -171,7 +171,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     }
     hasInitializedRef.current = true;
     initializePushNotifications().catch((error) => {
-      console.error('Push initialization failed:', error);
+      console.error('Push notification initialization failed. Check browser compatibility and Firebase configuration:', error);
       setIsSupported(false);
     });
   }, [initializePushNotifications]);
