@@ -13,6 +13,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   const onTokenReceivedRef = useRef(null);
   const hasInitializedRef = useRef(false);
   const pushNotificationsRef = useRef(null);
+  const foregroundUnsubscribeRef = useRef(null);
 
   useEffect(() => {
     onNotificationReceivedRef.current = onNotificationReceived;
@@ -119,7 +120,10 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       }
 
       // Foreground Messages für Web
-      onForegroundMessage((payload) => {
+      if (foregroundUnsubscribeRef.current) {
+        foregroundUnsubscribeRef.current();
+      }
+      foregroundUnsubscribeRef.current = onForegroundMessage((payload) => {
         console.log('Web Push empfangen (foreground):', payload);
         
         if (onNotificationReceivedRef.current) {
@@ -175,6 +179,15 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       setIsSupported(false);
     });
   }, [initializePushNotifications]);
+
+  useEffect(() => {
+    return () => {
+      if (foregroundUnsubscribeRef.current) {
+        foregroundUnsubscribeRef.current();
+        foregroundUnsubscribeRef.current = null;
+      }
+    };
+  }, []);
 
   // Manuelle Permission Anfrage (für UI Button)
   const requestPermission = useCallback(async () => {
