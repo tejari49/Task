@@ -1,10 +1,10 @@
 # 🚀 TaskRai FCM - Quick Start Guide
 
-## ✅ Alles ist bereits konfiguriert!
+## ✅ Grundstruktur ist bereits vorbereitet!
 
 ### Was bereits fertig ist:
-- ✅ `.env.local` mit VAPID Key erstellt
-- ✅ `firebase-messaging-sw.js` mit echten Credentials
+- ✅ `.env.example` als Vorlage vorhanden
+- ✅ `firebase-messaging-sw.js` vorbereitet (bitte eigene Credentials eintragen)
 - ✅ Code vollständig implementiert
 - ✅ Android Permissions gesetzt
 
@@ -42,7 +42,7 @@ npm run dev
 ┌─────────────────────────────────┐
 │  🔔 Push Benachrichtigungen     │
 │  Status: [Aktiv]                │
-│  [Token: BDJDq6q9...]           │
+│  [Token: DEIN_TOKEN...]         │
 └─────────────────────────────────┘
 ```
 
@@ -77,7 +77,7 @@ apk/taskrai-debug.apk
 ### Via Firebase Console (Empfohlen)
 
 1. Gehe zu: https://console.firebase.google.com
-2. Projekt: **task-rai** auswählen
+2. Projekt: **dein Firebase-Projekt** auswählen
 3. Links: **Messaging** (oder "Engage" → "Messaging")
 4. Button: **"Create your first campaign"** oder **"New campaign"**
 5. Wähle: **"Firebase Notification messages"**
@@ -152,14 +152,14 @@ adb logcat | grep -i "push\|fcm\|notification"
 
 ## 📊 Deine Firebase Credentials
 
-**Projekt:** task-rai
-**Project ID:** task-rai
-**App ID:** 1:99376901660:android:853c4f54be3b5e0e8d79d9
+**Projekt:** DEIN_FIREBASE_PROJEKT
+**Project ID:** DEIN_FIREBASE_PROJECT_ID
+**App ID:** DEINE_FIREBASE_APP_ID
 **Package Name:** com.irajet.task
 
 **VAPID Key (Web Push):**
 ```
-BDJDq6q9JBjqsNpqG13NiSUMvisrdPfKT3XBWGcsBGgNr5f_xp_MH6PQav75W7DI1dL1upvkA2ww9D16sksTPis
+DEIN_FIREBASE_VAPID_KEY
 ```
 
 ---

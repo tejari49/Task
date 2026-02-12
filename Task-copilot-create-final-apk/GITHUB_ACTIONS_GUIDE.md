@@ -56,18 +56,18 @@ git push -u origin main
 
 | Secret Name | Wert |
 |------------|------|
-| `FIREBASE_API_KEY` | `AIzaSyDMYgxeL7x8J0ceT4yYduhnjYn12CpnRWY` |
-| `FIREBASE_AUTH_DOMAIN` | `task-rai.firebaseapp.com` |
-| `FIREBASE_PROJECT_ID` | `task-rai` |
-| `FIREBASE_STORAGE_BUCKET` | `task-rai.firebasestorage.app` |
-| `FIREBASE_MESSAGING_SENDER_ID` | `99376901660` |
-| `FIREBASE_APP_ID` | `1:99376901660:android:853c4f54be3b5e0e8d79d9` |
-| `FIREBASE_VAPID_KEY` | `BDJDq6q9JBjqsNpqG13NiSUMvisrdPfKT3XBWGcsBGgNr5f_xp_MH6PQav75W7DI1dL1upvkA2ww9D16sksTPis` |
+| `FIREBASE_API_KEY` | `DEIN_FIREBASE_API_KEY` |
+| `FIREBASE_AUTH_DOMAIN` | `DEIN_FIREBASE_AUTH_DOMAIN` |
+| `FIREBASE_PROJECT_ID` | `DEIN_FIREBASE_PROJECT_ID` |
+| `FIREBASE_STORAGE_BUCKET` | `DEIN_FIREBASE_STORAGE_BUCKET` |
+| `FIREBASE_MESSAGING_SENDER_ID` | `DEINE_FIREBASE_MESSAGING_SENDER_ID` |
+| `FIREBASE_APP_ID` | `DEINE_FIREBASE_APP_ID` |
+| `FIREBASE_VAPID_KEY` | `DEIN_FIREBASE_VAPID_KEY` |
 
 **So sieht es aus:**
 ```
 Name: FIREBASE_API_KEY
-Secret: AIzaSyDMYgxeL7x8J0ceT4yYduhnjYn12CpnRWY
+Secret: DEIN_FIREBASE_API_KEY
 ```
 
 Dann **"Add secret"** klicken und für alle 7 Secrets wiederholen.
@@ -315,7 +315,7 @@ npm run version:major  # 1.1.0 → 2.0.0
   with:
     repoToken: '${{ secrets.GITHUB_TOKEN }}'
     firebaseServiceAccount: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}'
-    projectId: task-rai
+    projectId: DEIN_FIREBASE_PROJECT_ID
 ```
 
 ---
