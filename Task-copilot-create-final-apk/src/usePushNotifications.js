@@ -168,6 +168,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     hasInitializedRef.current = true;
     initializePushNotifications().catch((error) => {
       console.error('Fehler bei Push Initialization:', error);
+      setIsSupported(false);
     });
   }, [initializePushNotifications]);
 
@@ -178,12 +179,13 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     if (isCapacitor) {
       const pushNotifications = await loadPushNotifications();
       if (pushNotifications) {
-        return setupCapacitorPush(pushNotifications);
+        await setupCapacitorPush(pushNotifications);
+        return;
       }
       setIsSupported(false);
-      return null;
+      return;
     }
-    return setupWebPush();
+    await setupWebPush();
   }, [loadPushNotifications, setupCapacitorPush, setupWebPush]);
 
   return {
