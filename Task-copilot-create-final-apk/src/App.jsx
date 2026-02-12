@@ -204,6 +204,9 @@ export default function App() {
     }
   };
 
+  // Rest des Codes bleibt gleich...
+  // (Avatar, addTask, addFriend, etc. Funktionen)
+
   // Avatar Component
   const Avatar = ({ seed, size = 'md' }) => {
     const sizes = { sm: 'w-8 h-8 text-xs', md: 'w-10 h-10 text-sm', lg: 'w-12 h-12 text-base', xl: 'w-16 h-16 text-lg' };
@@ -439,7 +442,7 @@ export default function App() {
         <header className="mb-6 flex items-center justify-between">
           <button onClick={() => setCurrentView('dashboard')} className="p-2 -ml-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full text-gray-600 dark:text-gray-300"><ArrowLeft size={24} /></button>
           <h1 className="flex-1 ml-2 text-xl font-bold text-gray-900 dark:text-white">{activeTask.title}</h1>
-          <button onClick={() => deleteTask(activeTask.id); setCurrentView('dashboard');} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full text-red-600 dark:text-red-400"><Trash2 size={24} /></button>
+          <button onClick={() => { deleteTask(activeTask.id); setCurrentView('dashboard'); }} className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full text-red-600 dark:text-red-400"><Trash2 size={24} /></button>
         </header>
         <div className="space-y-4 mb-6">
           <div className="bg-white dark:bg-gray-900 p-4 rounded-xl border border-gray-100 dark:border-gray-800">
