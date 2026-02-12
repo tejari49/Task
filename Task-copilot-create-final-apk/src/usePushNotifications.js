@@ -24,8 +24,8 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     try {
       const module = await import('@capacitor/push-notifications');
       return module.PushNotifications;
-    } catch {
-      console.log('Capacitor Push Notifications nicht verfügbar');
+    } catch (error) {
+      console.error('Capacitor Push Notifications nicht verfügbar:', error);
       return null;
     }
   }, []);
@@ -138,6 +138,17 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     }
   }, []);
 
+  const setupCapacitorPushRef = useRef(setupCapacitorPush);
+  const setupWebPushRef = useRef(setupWebPush);
+
+  useEffect(() => {
+    setupCapacitorPushRef.current = setupCapacitorPush;
+  }, [setupCapacitorPush]);
+
+  useEffect(() => {
+    setupWebPushRef.current = setupWebPush;
+  }, [setupWebPush]);
+
   const initializePushNotifications = useCallback(async () => {
     // Prüfe ob wir in Capacitor (Android) oder Browser sind
     const isCapacitor = !!window.Capacitor;
@@ -145,15 +156,15 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
 
     if (isCapacitor && pushNotifications) {
       // === ANDROID (CAPACITOR) ===
-      await setupCapacitorPush(pushNotifications);
+      await setupCapacitorPushRef.current(pushNotifications);
     } else if ('Notification' in window && 'serviceWorker' in navigator) {
       // === WEB (BROWSER) ===
-      await setupWebPush();
+      await setupWebPushRef.current();
     } else {
       console.log('Push Notifications werden nicht unterstützt');
       setIsSupported(false);
     }
-  }, [loadPushNotifications, setupCapacitorPush, setupWebPush]);
+  }, [loadPushNotifications]);
 
   useEffect(() => {
     initializePushNotifications();
@@ -166,13 +177,13 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     if (isCapacitor) {
       const pushNotifications = await loadPushNotifications();
       if (pushNotifications) {
-        return setupCapacitorPush(pushNotifications);
+        return setupCapacitorPushRef.current(pushNotifications);
       }
       setIsSupported(false);
       return null;
     }
-    return setupWebPush();
-  }, [loadPushNotifications, setupCapacitorPush, setupWebPush]);
+    return setupWebPushRef.current();
+  }, [loadPushNotifications]);
 
   return {
     token,
