@@ -136,7 +136,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     if (isCapacitor && pushNotifications) {
       // === ANDROID (CAPACITOR) ===
       await setupCapacitorPush(pushNotifications);
-    } else if (!isCapacitor && 'Notification' in window && 'serviceWorker' in navigator) {
+    } else if ('Notification' in window && 'serviceWorker' in navigator) {
       // === WEB (BROWSER) ===
       await setupWebPush();
     } else {
