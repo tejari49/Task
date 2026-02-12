@@ -5,7 +5,9 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
 // Firebase Konfiguration - MUSS mit deiner .env.local übereinstimmen
-// WICHTIG: Ersetze die Platzhalter (VITE_FIREBASE_*) mit den echten Werten aus deiner .env.local, da .env hier nicht verfügbar ist
+// WICHTIG: Service Worker kann keine Env-Variablen lesen.
+// Ersetze die Platzhalter (VITE_FIREBASE_*) hier manuell mit den echten Werten aus deiner .env.local
+// (oder nutze einen Build-Schritt, der diese Werte einsetzt).
 // Beispiel: apiKey: "<dein-api-key>", authDomain: "<dein-projekt>.firebaseapp.com"
 const firebaseConfig = {
   apiKey: "VITE_FIREBASE_API_KEY",
