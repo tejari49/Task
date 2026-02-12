@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "99376901660-kcf54oip9bs9tdurv4jjk4nnh6hro131.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.irajet.task",
+            "certificate_hash": "8b14eb1378e5014c65471e2dc259ba5ed4e0c1ba"
+          }
+        },
+        {
           "client_id": "99376901660-4su6836vocq97tj87rgibkpkj512hgsd.apps.googleusercontent.com",
           "client_type": 3
         }
