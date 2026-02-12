@@ -9,60 +9,56 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        shell: bash
-
     steps:
       - name: 🛒 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🔧 Set up Node.js
+      - name: 🔧 Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
-          cache-dependency-path: Task-copilot-create-final-apk/package-lock.json
 
-      - name: ☕ Set up Java
+      - name: ☕ Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: "temurin"
           java-version: "21"
 
-      - name: 📱 Set up Android SDK
+      - name: 📱 Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: 📦 Install dependencies (ci if lock exists, else install)
+      # Abhängigkeiten installieren: Wenn kein gültiges lockfile vorhanden ist,
+      # erzeugen wir ein neues via npm install, sonst verwenden wir npm ci.
+      - name: 📦 Install dependencies
         working-directory: Task-copilot-create-final-apk
         run: |
-          set -euo pipefail
-          echo "[INFO] Node: $(node -v)"
-          echo "[INFO] NPM : $(npm -v)"
-          if [ -f package-lock.json ]; then
-            echo "[INFO] package-lock.json found -> npm ci"
-            npm ci
+          echo "[INFO] Prüfe package-lock.json..."
+          if [ ! -f package-lock.json ]; then
+            echo "[WARN] Keine package-lock.json gefunden. Erzeuge neue via npm install ..."
+            npm install --no-audit --no-fund
           else
-            echo "[WARN] package-lock.json missing -> npm install (and generating lock)"
-            npm install
-            echo "[INFO] Generated lockfile:"
-            ls -la package-lock.json || true
+            node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package-lock.json'));if(!p.lockfileVersion||p.lockfileVersion<1){process.exit(1);}" && VALID=1 || VALID=0
+            if [ "$VALID" -eq 1 ]; then
+              echo "[INFO] Gültige package-lock.json vorhanden -> npm ci"
+              npm ci
+            else
+              echo "[WARN] package-lock.json ungültig -> npm install (lockfile wird neu generiert)"
+              rm -f package-lock.json
+              npm install --no-audit --no-fund
+            fi
           fi
 
       - name: ⚡ Build web assets (z.B. Vite -> dist)
         working-directory: Task-copilot-create-final-apk
         run: |
-          set -euo pipefail
-          echo "[INFO] Building web assets..."
+          echo "[INFO] Build web assets..."
           npm run build
-          echo "[INFO] dist contents:"
-          ls -la dist || true
+          ls -la dist
           test -f dist/index.html
 
       - name: 🌀 Capacitor Android sync
         working-directory: Task-copilot-create-final-apk
         run: |
-          set -euo pipefail
           echo "[INFO] Syncing capacitor plugins..."
           npx cap sync android
 
@@ -72,7 +68,6 @@ jobs:
       - name: 🛠️ Build Debug APK
         working-directory: Task-copilot-create-final-apk/android
         run: |
-          set -euo pipefail
           echo "[INFO] Building Debug APK..."
           ./gradlew --no-daemon assembleDebug
 
