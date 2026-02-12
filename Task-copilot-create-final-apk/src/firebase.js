@@ -9,30 +9,33 @@ const isCapacitor = () => typeof window !== 'undefined' && !!window.Capacitor
 const isAndroid = () => isCapacitor() && window.Capacitor?.platform?.name === 'Android'
 const isWeb = () => !isCapacitor()
 
-// ✅ Firebase Config - Je nach Platform
+// ✅ Firebase Config - HARDCODED für Android & Environment Variables für Web
 const getFirebaseConfig = () => {
-  if (isAndroid()) {
-    // Android Config
+  // ✅ HARDCODED VALUES (funktionieren auf Android!)
+  const hardcodedConfig = {
+    apiKey: "AIzaSyBrlDiaISY2hajF7LBvFkgdEcUMsRzQneQ",
+    authDomain: "task-rai.firebaseapp.com",
+    projectId: "task-rai",
+    storageBucket: "task-rai.firebasestorage.app",
+    messagingSenderId: "99376901660",
+    appId: "1:99376901660:web:87dac908af8143968d79d9",
+    databaseURL: "https://task-rai.firebaseio.com",
+  }
+
+  // Für Web: Versuche .env.local zu laden, fallback auf hardcoded
+  if (isWeb()) {
     return {
-      apiKey: import.meta.env.VITE_FIREBASE_ANDROID_API_KEY || import.meta.env.VITE_FIREBASE_API_KEY,
-      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-      appId: import.meta.env.VITE_FIREBASE_ANDROID_APP_ID || import.meta.env.VITE_FIREBASE_APP_ID,
-      databaseURL: `https://${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseio.com`,
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY || hardcodedConfig.apiKey,
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || hardcodedConfig.authDomain,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || hardcodedConfig.projectId,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || hardcodedConfig.storageBucket,
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || hardcodedConfig.messagingSenderId,
+      appId: import.meta.env.VITE_FIREBASE_APP_ID || hardcodedConfig.appId,
+      databaseURL: hardcodedConfig.databaseURL,
     }
   } else {
-    // Web Config
-    return {
-      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-      appId: import.meta.env.VITE_FIREBASE_APP_ID,
-      databaseURL: `https://${import.meta.env.VITE_FIREBASE_PROJECT_ID}.firebaseio.com`,
-    }
+    // Für Android: Immer hardcoded (Environment vars funktionieren nicht in APK)
+    return hardcodedConfig
   }
 }
 
@@ -50,18 +53,19 @@ export const isFirebaseConfigured = () => {
   if (!allValuesSet) {
     console.warn('⚠️ Firebase ist nicht vollständig konfiguriert!')
     console.warn('🔧 Platform:', isAndroid() ? 'Android/Capacitor' : isWeb() ? 'Web/Browser' : 'Unbekannt')
-    console.warn('Fehlende oder leere Werte in .env.local:')
+    console.warn('Fehlende oder leere Werte:')
     requiredKeys.forEach(key => {
       const value = firebaseConfig[key]
       if (!value || String(value).trim() === '') {
         console.warn(`  ❌ ${key}`)
       } else {
-        console.log(`  ✅ ${key}`)
+        console.log(`  ✅ ${key}: ${String(value).substring(0, 20)}...`)
       }
     })
     return false
   }
   
+  console.log('✅ Alle Firebase Config Werte sind gesetzt!')
   return true
 }
 
@@ -77,6 +81,7 @@ if (isFirebaseConfigured()) {
   try {
     console.log('🚀 Starte Firebase Initialisierung...')
     console.log('📱 Platform:', isAndroid() ? 'Android/Capacitor' : isWeb() ? 'Web/Browser' : 'Unbekannt')
+    console.log('🔐 Verwende:', isAndroid() ? 'HARDCODED Config (Android APK)' : 'ENV + Fallback Config')
     
     app = initializeApp(firebaseConfig)
     console.log('✅ Firebase App initialisiert')
@@ -88,6 +93,7 @@ if (isFirebaseConfigured()) {
     // Für Capacitor/Android Google Sign-In
     if (isAndroid()) {
       googleProvider.setDefaultLanguage('de')
+      console.log('✅ Google Provider für Android konfiguriert')
     }
     
     console.log('✅ Firebase Auth & Google Provider initialisiert')
@@ -127,7 +133,7 @@ if (isFirebaseConfigured()) {
     console.error('Error Details:', error.message)
   }
 } else {
-  console.error('❌ Firebase konnte nicht initialisiert werden - .env.local nicht korrekt konfiguriert')
+  console.error('❌ Firebase konnte nicht initialisiert werden - Config ist unvollständig!')
 }
 
 // ===== FCM FUNCTIONS =====
@@ -236,7 +242,8 @@ export {
   rtdb,         // Realtime Database
   isAndroid,
   isWeb,
-  isCapacitor
+  isCapacitor,
+  firebaseConfig
 }
 
 export default {
@@ -252,5 +259,6 @@ export default {
   getAndroidFCMToken,
   isAndroid,
   isWeb,
-  isCapacitor
+  isCapacitor,
+  firebaseConfig
 }
