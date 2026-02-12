@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence, signInWithCredential } from 'firebase/auth'
 import { getMessaging, getToken, onMessage } from 'firebase/messaging'
 import { getFirestore } from 'firebase/firestore'
 import { getDatabase } from 'firebase/database'
@@ -24,23 +24,18 @@ const isAndroid = () => {
 }
 const isWeb = () => !isCapacitor()
 
-// Debug at module load
 console.log('🔍 Firebase helper init — Capacitor present:', Boolean(typeof window !== 'undefined' && window.Capacitor), 'Capacitor.getPlatform():', getCapacitorPlatform())
 
-// ✅ Firebase Config - HARDCODED für Android & Environment Variables für Web
 const getFirebaseConfig = () => {
-  // ✅ HARDCODED VALUES (funktionieren auf Android!)
   const hardcodedConfig = {
     apiKey: "AIzaSyBrlDiaISY2hajF7LBvFkgdEcUMsRzQneQ",
     authDomain: "task-rai.firebaseapp.com",
     projectId: "task-rai",
-    storageBucket: "task-rai.appspot.com", // <-- korrigiert
+    storageBucket: "task-rai.appspot.com",
     messagingSenderId: "99376901660",
     appId: "1:99376901660:web:87dac908af8143968d79d9",
     databaseURL: "https://task-rai.firebaseio.com",
   }
-
-  // Für Web: Versuche .env.local zu laden, fallback auf hardcoded
   if (isWeb()) {
     return {
       apiKey: import.meta.env.VITE_FIREBASE_API_KEY || hardcodedConfig.apiKey,
@@ -52,42 +47,33 @@ const getFirebaseConfig = () => {
       databaseURL: hardcodedConfig.databaseURL,
     }
   } else {
-    // Für Android: Immer hardcoded (Environment vars funktionieren nicht in APK)
     return hardcodedConfig
   }
 }
 
 const firebaseConfig = getFirebaseConfig()
 
-// ✅ Überprüfe ob alle Firebase Config Werte gesetzt sind
 export const isFirebaseConfigured = () => {
   const requiredKeys = ['apiKey', 'authDomain', 'projectId', 'storageBucket', 'messagingSenderId', 'appId']
-  
   const allValuesSet = requiredKeys.every(key => {
     const value = firebaseConfig[key]
     return value && String(value).trim() !== ''
   })
-  
   if (!allValuesSet) {
     console.warn('⚠️ Firebase ist nicht vollständig konfiguriert!')
     console.warn('🔧 Platform:', isAndroid() ? 'Android/Capacitor' : isWeb() ? 'Web/Browser' : 'Unbekannt')
-    console.warn('Fehlende oder leere Werte:')
     requiredKeys.forEach(key => {
       const value = firebaseConfig[key]
       if (!value || String(value).trim() === '') {
         console.warn(`  ❌ ${key}`)
-      } else {
-        console.log(`  ✅ ${key}: ${String(value).substring(0, 20)}...`)
       }
     })
     return false
   }
-  
-  console.log('✅ Alle Firebase Config Werte sind gesetzt!')
   return true
 }
 
-// ✅ Initialisiere Firebase nur wenn vollständig konfiguriert
+// Firebase init
 let app = null
 let auth = null
 let googleProvider = null
@@ -97,158 +83,68 @@ let rtdb = null
 
 if (isFirebaseConfigured()) {
   try {
-    console.log('🚀 Starte Firebase Initialisierung...')
-    console.log('📱 Platform:', isAndroid() ? 'Android/Capacitor' : isWeb() ? 'Web/Browser' : 'Unbekannt')
-    console.log('🔐 Verwende:', isAndroid() ? 'HARDCODED Config (Android APK)' : 'ENV + Fallback Config')
-    
     app = initializeApp(firebaseConfig)
-    console.log('✅ Firebase App initialisiert')
-    
-    // Auth
     auth = getAuth(app)
     googleProvider = new GoogleAuthProvider()
-    
-    // ✅ WICHTIG für Android: Google Provider Konfiguration
     googleProvider.setCustomParameters({
       'prompt': 'select_account'
     })
-    
-    if (isAndroid()) {
-      try {
-        if (typeof googleProvider.setDefaultLanguage === 'function') googleProvider.setDefaultLanguage('de')
-        console.log('✅ Google Provider für Android konfiguriert (mit Custom Parameters)')
-      } catch (e) {
-        console.warn('Could not set provider default language:', e)
-      }
+    if (isAndroid() && typeof googleProvider.setDefaultLanguage === 'function') {
+      googleProvider.setDefaultLanguage('de')
     }
-    
-    console.log('✅ Firebase Auth & Google Provider initialisiert')
-    
-    // Firestore
-    try {
-      db = getFirestore(app)
-      console.log('✅ Firestore initialisiert')
-    } catch (err) {
-      console.warn('⚠️ Firestore nicht verfügbar:', err.message)
-    }
-    
-    // Realtime Database
-    try {
-      rtdb = getDatabase(app)
-      console.log('✅ Realtime Database initialisiert')
-    } catch (err) {
-      console.warn('⚠️ Realtime Database nicht verfügbar:', err.message)
-    }
-    
-    // Firebase Cloud Messaging nur im Browser initialisieren
+    db = getFirestore(app)
+    rtdb = getDatabase(app)
     if (isWeb()) {
-      try {
-        messaging = getMessaging(app)
-        console.log('✅ Firebase Cloud Messaging (FCM) aktiviert')
-      } catch (err) {
-        console.warn('⚠️ Firebase Messaging nicht verfügbar:', err.message)
-      }
-    } else if (isAndroid()) {
-      console.log('ℹ️ FCM wird nativ auf Android verwaltet')
+      messaging = getMessaging(app)
     }
-    
-    console.log('✅ Firebase vollständig initialisiert!')
-    
   } catch (error) {
     console.error('❌ Fehler bei Firebase Initialisierung:', error)
-    console.error('Error Details:', error.message)
   }
-} else {
-  console.error('❌ Firebase konnte nicht initialisiert werden - Config ist unvollständig!')
 }
 
-// ===== GOOGLE SIGN-IN WRAPPER =====
+// ===== GOOGLE SIGN-IN WRAPPER (Block Popup on Android!) =====
 
-/**
- * ✅ Wrapper für signInWithPopup mit Android Support
- * Auf Android wird native Google Sign-In verwendet wenn verfügbar
- */
 export async function googleSignIn() {
   console.log('🔐 Google Sign-In gestartet...')
   console.log('📱 Platform detection -> isCapacitor:', isCapacitor(), 'isAndroid():', isAndroid())
-  console.log('📦 window.Capacitor?.Plugins:', typeof window !== 'undefined' ? window.Capacitor?.Plugins : 'no-window')
-
-  // Prüfe GoogleAuth Plugin-Verfügbarkeit
   const hasGoogleAuthPlugin = typeof window !== 'undefined' && !!window.Capacitor?.Plugins?.GoogleAuth
   console.log('🔎 GoogleAuth plugin present:', hasGoogleAuthPlugin)
 
-  // ✅ Versuche zuerst native Android Google Sign-In
+  // Native GoogleAuth flow
   if (isAndroid() && hasGoogleAuthPlugin) {
     try {
-      console.log('🔑 Versuche native Android Google Sign-In...')
       const GoogleAuth = window.Capacitor.Plugins.GoogleAuth
-      console.log('GoogleAuth object keys:', GoogleAuth ? Object.keys(GoogleAuth) : 'no-googleauth')
-
-      // Initialisiere Google Auth Plugin
       await GoogleAuth.initialize({
         clientId: import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID_WEB || '99376901660-4su6836vocq97tj87rgibkpkj512hgsd.apps.googleusercontent.com',
         scopes: ['profile', 'email'],
         grantOfflineAccess: true,
       })
-
       const result = await GoogleAuth.signIn()
-      console.log('✅ Native Android Google Sign-In erfolgreich!', result)
-      console.log('User (native):', result.email)
-
-      // Jetzt mit Firebase Auth anmelden (try/catch to surface errors)
       if (result.authentication?.idToken) {
-        try {
-          console.log('🔐 Anmeldung mit Firebase Auth (native token)...')
-          const credential = googleProvider.credential(null, result.authentication.idToken)
-          // Use firebase auth signInWithCredential in modular SDK: auth.signInWithCredential is not available in compat; keep original flow if present
-          if (auth && auth.signInWithCredential) {
-            const authResult = await auth.signInWithCredential(credential)
-            console.log('✅ Firebase Auth erfolgreich (native)!')
-            return authResult
-          } else if (auth && typeof import('firebase/auth').then === 'function') {
-            // best effort fallback -- still try to return
-            console.log('⚠️ auth.signInWithCredential not available on this auth instance')
-          }
-        } catch (e) {
-          console.error('❌ Fehler beim Anmelden mit Firebase Credential (native):', e)
-        }
+        const credential = googleProvider.credential(null, result.authentication.idToken)
+        // Modular Firebase Auth
+        const authResult = await signInWithCredential(auth, credential)
+        return authResult
       }
-
+      throw new Error('Kein idToken von GoogleAuth erhalten!')
     } catch (error) {
       console.error('❌ Nativer Android Google Sign-In fehlgeschlagen:', error)
-      console.log('📱 Fallback zu Web Popup...')
-      // Fallback auf Web Popup
+      throw new Error('Native Google Sign-In fehlgeschlagen: ' + error.message)
     }
-  } else {
-    console.log('➡️ Native plugin nicht verfügbar oder nicht Android — fallback auf web popup')
   }
-  
-  // ✅ Web Popup (oder Fallback für Android)
+
+  // BLOCK POPUP on Android/Capacitor (no Web-Popup fallback)
+  if (!isWeb()) {
+    throw new Error('Native GoogleAuth-Integration ist nicht verfügbar. Bitte Plugin installieren und npx cap sync android ausführen. Web-Popup ist in Android-Apps NICHT möglich.');
+  }
+
+  // Web-Popup-Flow (nur Browser)
   try {
-    console.log('🔐 Verwende Web Popup für Google Sign-In...')
-
-    // === PATCH: Auth Persistenz robust setzen! ===
-    try {
-      await setPersistence(auth, browserLocalPersistence)
-    } catch (err) {
-      console.warn('⚠️ Konnte Auth-Persistenz nicht setzen:', err)
-    }
-    // === PATCH ENDE ===
-
-    // Setze Custom Parameter für besseres UX
-    googleProvider.setCustomParameters({
-      'prompt': 'select_account'
-    })
-    
+    await setPersistence(auth, browserLocalPersistence)
+    googleProvider.setCustomParameters({ 'prompt': 'select_account' })
     const result = await signInWithPopup(auth, googleProvider)
-    console.log('✅ Web Popup Google Sign-In erfolgreich!')
-    console.log('User:', result.user?.email || result.user)
     return result
-    
   } catch (error) {
-    console.error('❌ Web Popup Google Sign-In fehlgeschlagen:', error)
-    
-    // Bessere Error Messages
     if (error.code === 'auth/popup-closed-by-user') {
       throw new Error('Google Sign-In Fenster wurde geschlossen. Bitte versuche es erneut.')
     } else if (error.code === 'auth/popup-blocked') {
@@ -261,55 +157,29 @@ export async function googleSignIn() {
   }
 }
 
-// ===== FCM FUNCTIONS =====
+// ===== FCM, DB, EXPORT =====
 
-// FCM Token für Web anfordern
 export async function requestFCMToken() {
   if (!messaging) {
-    console.log('ℹ️ Messaging nicht initialisiert (Web-only Feature)')
     return null
   }
-
   try {
     const permission = await Notification.requestPermission()
-    
-    if (permission === 'default') {
-      console.log('ℹ️ Notification permission: User hat nicht entschieden')
-      return null
-    }
-    
-    if (permission !== 'granted') {
-      console.log('❌ Notification permission nicht erteilt')
-      return null
-    }
-
+    if (permission !== 'granted') return null
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY
-    
-    if (!vapidKey || String(vapidKey).trim() === '') {
-      console.warn('⚠️ VITE_FIREBASE_VAPID_KEY fehlt oder ist leer in .env.local')
-      return null
-    }
-
+    if (!vapidKey) return null
     const token = await getToken(messaging, { vapidKey })
-    console.log('✅ FCM Token erhalten:', token.substring(0, 20) + '...')
     return token
   } catch (error) {
-    console.error('❌ Fehler beim FCM Token abrufen:', error.message)
     return null
   }
 }
 
-// Foreground Messages für Web empfangen
 export function onForegroundMessage(callback) {
-  if (!messaging) {
-    console.log('ℹ️ Messaging nicht verfügbar für Foreground Messages')
-    return () => {}
-  }
-
+  if (!messaging) return () => {}
   try {
     const unsubscribe = onMessage(messaging, (payload) => {
-      console.log('📨 Foreground message empfangen:', payload)
-      
+      callback(payload)
       if (payload.notification) {
         new Notification(payload.notification.title || 'TaskRai', {
           body: payload.notification.body,
@@ -317,47 +187,32 @@ export function onForegroundMessage(callback) {
           badge: '/firebase-messaging-sw.js',
         })
       }
-      
-      callback(payload)
     })
-
     return unsubscribe
   } catch (error) {
-    console.error('❌ Fehler bei onForegroundMessage:', error.message)
     return () => {}
   }
 }
 
-// ===== ANDROID FCM =====
-
-// Für Capacitor/Android - FCM Token vom System abrufen
 export async function getAndroidFCMToken() {
-  if (!isAndroid()) {
-    return null
-  }
-  
+  if (!isAndroid()) return null
   try {
     if (window.Capacitor?.Plugins?.PushNotifications) {
       const push = window.Capacitor.Plugins.PushNotifications
       const result = await push.getDeliveredNotifications()
-      console.log('✅ Android FCM Token abrufen erfolgreich')
       return result
     }
-  } catch (error) {
-    console.error('❌ Fehler beim Android FCM Token:', error.message)
-  }
+  } catch (error) {}
   return null
 }
 
-// ===== EXPORTS =====
-
-export { 
-  app, 
-  auth, 
-  googleProvider, 
+export {
+  app,
+  auth,
+  googleProvider,
   messaging,
-  db,           // Firestore
-  rtdb,         // Realtime Database
+  db,
+  rtdb,
   isAndroid,
   isWeb,
   isCapacitor,
@@ -372,7 +227,7 @@ export default {
   db,
   rtdb,
   isFirebaseConfigured,
-  googleSignIn,  // ✅ NEU!
+  googleSignIn,
   requestFCMToken,
   onForegroundMessage,
   getAndroidFCMToken,
