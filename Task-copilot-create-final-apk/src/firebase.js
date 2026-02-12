@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
 import { getMessaging, getToken, onMessage } from 'firebase/messaging'
 import { getFirestore } from 'firebase/firestore'
 import { getDatabase } from 'firebase/database'
@@ -90,10 +90,14 @@ if (isFirebaseConfigured()) {
     auth = getAuth(app)
     googleProvider = new GoogleAuthProvider()
     
-    // Für Capacitor/Android Google Sign-In
+    // ✅ WICHTIG für Android: Google Provider Konfiguration
+    googleProvider.setCustomParameters({
+      'prompt': 'select_account'
+    })
+    
     if (isAndroid()) {
       googleProvider.setDefaultLanguage('de')
-      console.log('✅ Google Provider für Android konfiguriert')
+      console.log('✅ Google Provider für Android konfiguriert (mit Custom Parameters)')
     }
     
     console.log('✅ Firebase Auth & Google Provider initialisiert')
@@ -136,6 +140,78 @@ if (isFirebaseConfigured()) {
   console.error('❌ Firebase konnte nicht initialisiert werden - Config ist unvollständig!')
 }
 
+// ===== GOOGLE SIGN-IN WRAPPER =====
+
+/**
+ * ✅ Wrapper für signInWithPopup mit Android Support
+ * Auf Android wird native Google Sign-In verwendet wenn verfügbar
+ */
+export async function googleSignIn() {
+  console.log('🔐 Google Sign-In gestartet...')
+  console.log('📱 Platform:', isAndroid() ? 'Android (native)' : 'Web (popup)')
+  
+  // ✅ Versuche zuerst native Android Google Sign-In
+  if (isAndroid() && window.Capacitor?.Plugins?.GoogleAuth) {
+    try {
+      console.log('🔑 Versuche native Android Google Sign-In...')
+      const GoogleAuth = window.Capacitor.Plugins.GoogleAuth
+      
+      // Initialisiere Google Auth Plugin
+      await GoogleAuth.initialize({
+        clientId: '99376901660-4su6836vocq97tj87rgibkpkj512hgsd.apps.googleusercontent.com',
+        scopes: ['profile', 'email'],
+        grantOfflineAccess: true,
+      })
+      
+      const result = await GoogleAuth.signIn()
+      console.log('✅ Native Android Google Sign-In erfolgreich!')
+      console.log('User:', result.email)
+      
+      // Jetzt mit Firebase Auth anmelden
+      if (result.authentication?.idToken) {
+        console.log('🔐 Anmeldung mit Firebase Auth...')
+        const credential = googleProvider.credential(null, result.authentication.idToken)
+        const authResult = await auth.signInWithCredential(credential)
+        console.log('✅ Firebase Auth erfolgreich!')
+        return authResult
+      }
+    } catch (error) {
+      console.error('❌ Nativer Android Google Sign-In fehlgeschlagen:', error)
+      console.log('📱 Fallback zu Web Popup...')
+      // Fallback auf Web Popup
+    }
+  }
+  
+  // ✅ Web Popup (oder Fallback für Android)
+  try {
+    console.log('🔐 Verwende Web Popup für Google Sign-In...')
+    
+    // Setze Custom Parameter für besseres UX
+    googleProvider.setCustomParameters({
+      'prompt': 'select_account'
+    })
+    
+    const result = await signInWithPopup(auth, googleProvider)
+    console.log('✅ Web Popup Google Sign-In erfolgreich!')
+    console.log('User:', result.user.email)
+    return result
+    
+  } catch (error) {
+    console.error('❌ Web Popup Google Sign-In fehlgeschlagen:', error)
+    
+    // Bessere Error Messages
+    if (error.code === 'auth/popup-closed-by-user') {
+      throw new Error('Google Sign-In Fenster wurde geschlossen. Bitte versuche es erneut.')
+    } else if (error.code === 'auth/popup-blocked') {
+      throw new Error('Pop-up wurde blockiert. Bitte erlaube Pop-ups für diese App.')
+    } else if (error.code === 'auth/operation-not-allowed') {
+      throw new Error('Google Sign-In ist nicht aktiviert. Kontaktiere den Administrator.')
+    } else {
+      throw new Error('Google Sign-In fehlgeschlagen: ' + error.message)
+    }
+  }
+}
+
 // ===== FCM FUNCTIONS =====
 
 // FCM Token für Web anfordern
@@ -162,10 +238,6 @@ export async function requestFCMToken() {
     
     if (!vapidKey || String(vapidKey).trim() === '') {
       console.warn('⚠️ VITE_FIREBASE_VAPID_KEY fehlt oder ist leer in .env.local')
-      console.warn('ℹ️ Um FCM Web Push zu aktivieren:')
-      console.log('  1. Gehe zu Firebase Console -> Project Settings -> Cloud Messaging')
-      console.log('  2. Kopiere den "Web Push Certificate" Public Key')
-      console.log('  3. Setze VITE_FIREBASE_VAPID_KEY in .env.local')
       return null
     }
 
@@ -189,8 +261,6 @@ export function onForegroundMessage(callback) {
     const unsubscribe = onMessage(messaging, (payload) => {
       console.log('📨 Foreground message empfangen:', payload)
       
-      // Firebase zeigt Notification nur im Hintergrund automatisch
-      // Im Vordergrund müssen wir selbst zeigen:
       if (payload.notification) {
         new Notification(payload.notification.title || 'TaskRai', {
           body: payload.notification.body,
@@ -218,7 +288,6 @@ export async function getAndroidFCMToken() {
   }
   
   try {
-    // Mit @capacitor/push-notifications
     if (window.Capacitor?.Plugins?.PushNotifications) {
       const push = window.Capacitor.Plugins.PushNotifications
       const result = await push.getDeliveredNotifications()
@@ -254,6 +323,7 @@ export default {
   db,
   rtdb,
   isFirebaseConfigured,
+  googleSignIn,  // ✅ NEU!
   requestFCMToken,
   onForegroundMessage,
   getAndroidFCMToken,
