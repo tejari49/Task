@@ -13,6 +13,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@codetrix-studio/capacitor-google-auth": "^3.1.4"
     "@capacitor/android": "^8.1.0",
     "@capacitor/core": "^8.1.0",
     "@capacitor/push-notifications": "^8.0.0",
