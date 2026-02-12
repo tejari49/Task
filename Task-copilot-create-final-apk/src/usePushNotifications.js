@@ -14,6 +14,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   const initializationPromiseRef = useRef(null);
   const pushNotificationsRef = useRef(null);
   const foregroundUnsubscribeRef = useRef(null);
+  const capacitorListenersRef = useRef([]);
 
   useEffect(() => {
     onNotificationReceivedRef.current = onNotificationReceived;
@@ -45,8 +46,18 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     }
   }, []);
 
+  const clearCapacitorListeners = useCallback(() => {
+    capacitorListenersRef.current.forEach((listener) => {
+      if (listener?.remove) {
+        listener.remove();
+      }
+    });
+    capacitorListenersRef.current = [];
+  }, []);
+
   const setupCapacitorPush = useCallback(async (pushNotifications) => {
     try {
+      clearCapacitorListeners();
       // Permission anfragen
       const result = await pushNotifications.requestPermissions();
       
@@ -58,7 +69,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
         await pushNotifications.register();
 
         // Token Listener
-        pushNotifications.addListener('registration', (token) => {
+        const registrationListener = await pushNotifications.addListener('registration', (token) => {
           console.log('Android Push Token:', token.value);
           setToken(token.value);
           if (onTokenReceivedRef.current) {
@@ -67,12 +78,12 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
         });
 
         // Registration Error
-        pushNotifications.addListener('registrationError', (error) => {
+        const registrationErrorListener = await pushNotifications.addListener('registrationError', (error) => {
           console.error('Android Push Registration Error:', error);
         });
 
         // Foreground Notification (App ist offen)
-        pushNotifications.addListener('pushNotificationReceived', (notification) => {
+        const foregroundListener = await pushNotifications.addListener('pushNotificationReceived', (notification) => {
           console.log('Android Push empfangen (foreground):', notification);
           if (onNotificationReceivedRef.current) {
             onNotificationReceivedRef.current(notification, 'android');
@@ -80,12 +91,18 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
         });
 
         // Notification Click (App wird geöffnet)
-        pushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+        const actionListener = await pushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
           console.log('Android Push geklickt:', notification);
           if (onNotificationReceivedRef.current) {
             onNotificationReceivedRef.current(notification.notification, 'android-click');
           }
         });
+        capacitorListenersRef.current = [
+          registrationListener,
+          registrationErrorListener,
+          foregroundListener,
+          actionListener
+        ];
         return true;
       } else {
         setPermission('denied');
@@ -97,7 +114,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       setIsSupported(false);
       return false;
     }
-  }, []);
+  }, [clearCapacitorListeners]);
 
   // Web Push Setup
   const setupWebPush = useCallback(async () => {
@@ -187,12 +204,16 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
     initializationPromiseRef.current = initializePushNotifications().catch((error) => {
       console.error('Push notification initialization failed. Check browser compatibility and Firebase configuration:', error);
       setIsSupported(false);
+      initializationPromiseRef.current = null;
     });
   }, [initializePushNotifications]);
 
   useEffect(() => {
-    return () => clearForegroundSubscription();
-  }, [clearForegroundSubscription]);
+    return () => {
+      clearForegroundSubscription();
+      clearCapacitorListeners();
+    };
+  }, [clearForegroundSubscription, clearCapacitorListeners]);
 
   useEffect(() => {
     return () => {
