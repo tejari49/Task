@@ -1,16 +1,13 @@
 {
   "name": "taskrai",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "android:sync": "npm run build && cap sync android",
-    "android:build": "npm run android:sync && cd android && ./gradlew assembleDebug",
-    "android:apk": "npm run android:build && node scripts/copy-apk.js",
-    "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@codetrix-studio/capacitor-google-auth": "^3.1.4",
