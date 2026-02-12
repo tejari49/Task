@@ -1,3 +1,4 @@
+/* global importScripts, firebase, clients */
 // Firebase Messaging Service Worker für Background Push Notifications
 // Diese Datei muss im Root der Web-App liegen (public/)
 

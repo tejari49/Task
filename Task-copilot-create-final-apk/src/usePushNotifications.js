@@ -1,14 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { requestFCMToken, onForegroundMessage } from './firebase';
-
-// Capacitor Push Notifications (für Android)
-// Installiere zuerst: npm install @capacitor/push-notifications
-let PushNotifications;
-try {
-  PushNotifications = require('@capacitor/push-notifications').PushNotifications;
-} catch (err) {
-  console.log('Capacitor Push Notifications nicht verfügbar');
-}
 
 /**
  * Custom Hook für Push Notifications
@@ -19,41 +10,31 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   const [permission, setPermission] = useState('default');
   const [isSupported, setIsSupported] = useState(false);
 
-  useEffect(() => {
-    initializePushNotifications();
+  const loadPushNotifications = useCallback(async () => {
+    try {
+      const module = await import('@capacitor/push-notifications');
+      return module.PushNotifications;
+    } catch {
+      console.log('Capacitor Push Notifications nicht verfügbar');
+      return null;
+    }
   }, []);
 
-  const initializePushNotifications = async () => {
-    // Prüfe ob wir in Capacitor (Android) oder Browser sind
-    const isCapacitor = !!window.Capacitor;
-
-    if (isCapacitor && PushNotifications) {
-      // === ANDROID (CAPACITOR) ===
-      await setupCapacitorPush();
-    } else if ('Notification' in window && 'serviceWorker' in navigator) {
-      // === WEB (BROWSER) ===
-      await setupWebPush();
-    } else {
-      console.log('Push Notifications werden nicht unterstützt');
-      setIsSupported(false);
-    }
-  };
-
   // Android Push Setup
-  const setupCapacitorPush = async () => {
+  const setupCapacitorPush = useCallback(async (pushNotifications) => {
     try {
       // Permission anfragen
-      const result = await PushNotifications.requestPermissions();
+      const result = await pushNotifications.requestPermissions();
       
       if (result.receive === 'granted') {
         setPermission('granted');
         setIsSupported(true);
         
         // Registrieren
-        await PushNotifications.register();
+        await pushNotifications.register();
 
         // Token Listener
-        PushNotifications.addListener('registration', (token) => {
+        pushNotifications.addListener('registration', (token) => {
           console.log('Android Push Token:', token.value);
           setToken(token.value);
           if (onTokenReceived) {
@@ -62,12 +43,12 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
         });
 
         // Registration Error
-        PushNotifications.addListener('registrationError', (error) => {
+        pushNotifications.addListener('registrationError', (error) => {
           console.error('Android Push Registration Error:', error);
         });
 
         // Foreground Notification (App ist offen)
-        PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        pushNotifications.addListener('pushNotificationReceived', (notification) => {
           console.log('Android Push empfangen (foreground):', notification);
           if (onNotificationReceived) {
             onNotificationReceived(notification, 'android');
@@ -75,7 +56,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
         });
 
         // Notification Click (App wird geöffnet)
-        PushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
+        pushNotifications.addListener('pushNotificationActionPerformed', (notification) => {
           console.log('Android Push geklickt:', notification);
           if (onNotificationReceived) {
             onNotificationReceived(notification.notification, 'android-click');
@@ -89,10 +70,10 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       console.error('Fehler bei Android Push Setup:', error);
       setIsSupported(false);
     }
-  };
+  }, [onNotificationReceived, onTokenReceived]);
 
   // Web Push Setup
-  const setupWebPush = async () => {
+  const setupWebPush = useCallback(async () => {
     try {
       setIsSupported(true);
 
@@ -145,17 +126,42 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       console.error('Fehler bei Web Push Setup:', error);
       setIsSupported(false);
     }
-  };
+  }, [onNotificationReceived, onTokenReceived]);
+
+  const initializePushNotifications = useCallback(async () => {
+    // Prüfe ob wir in Capacitor (Android) oder Browser sind
+    const isCapacitor = !!window.Capacitor;
+    const pushNotifications = isCapacitor ? await loadPushNotifications() : null;
+
+    if (isCapacitor && pushNotifications) {
+      // === ANDROID (CAPACITOR) ===
+      await setupCapacitorPush(pushNotifications);
+    } else if (!isCapacitor && 'Notification' in window && 'serviceWorker' in navigator) {
+      // === WEB (BROWSER) ===
+      await setupWebPush();
+    } else {
+      console.log('Push Notifications werden nicht unterstützt');
+      setIsSupported(false);
+    }
+  }, [loadPushNotifications, setupCapacitorPush, setupWebPush]);
+
+  useEffect(() => {
+    initializePushNotifications();
+  }, [initializePushNotifications]);
 
   // Manuelle Permission Anfrage (für UI Button)
   const requestPermission = async () => {
     const isCapacitor = !!window.Capacitor;
     
-    if (isCapacitor && PushNotifications) {
-      return setupCapacitorPush();
-    } else {
-      return setupWebPush();
+    if (isCapacitor) {
+      const pushNotifications = await loadPushNotifications();
+      if (pushNotifications) {
+        return setupCapacitorPush(pushNotifications);
+      }
+      setIsSupported(false);
+      return null;
     }
+    return setupWebPush();
   };
 
   return {
