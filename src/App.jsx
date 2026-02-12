@@ -123,7 +123,8 @@ export default function App() {
     }
     try {
       await signInWithPopup(auth, googleProvider);
-    } catch {
+    } catch (error) {
+      console.error('Firebase login failed', error);
       setAuthError('Anmeldung fehlgeschlagen.');
     }
   };
@@ -136,7 +137,8 @@ export default function App() {
       } else {
         setIsAuthenticated(false);
       }
-    } catch {
+    } catch (error) {
+      console.error('Firebase logout failed', error);
       setAuthError('Abmeldung fehlgeschlagen.');
     } finally {
       setCurrentView('dashboard');
