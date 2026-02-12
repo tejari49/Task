@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main" ]
     paths:
-      - "package.json"
+      - "**/package.json"
       - ".github/workflows/generate-package-lock.yml"
   workflow_dispatch: {}
 
@@ -27,20 +27,49 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Generate package-lock.json
+      - name: Find project directory (package.json)
+        id: findpkg
+        shell: bash
         run: |
+          set -euo pipefail
+
+          # Find first package.json (exclude node_modules)
+          PKG_PATH="$(find . -name package.json -not -path '*/node_modules/*' -print -quit)"
+
+          if [ -z "${PKG_PATH:-}" ]; then
+            echo "ERROR: No package.json found anywhere in repo."
+            echo "Repo contents (top-level):"
+            ls -la
+            exit 1
+          fi
+
+          PKG_DIR="$(dirname "$PKG_PATH")"
+          echo "Found package.json at: $PKG_PATH"
+          echo "Project dir: $PKG_DIR"
+
+          echo "pkg_dir=$PKG_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Generate package-lock.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "${{ steps.findpkg.outputs.pkg_dir }}"
           npm install --package-lock-only --no-audit --no-fund
 
       - name: Commit & push if changed
+        shell: bash
         run: |
-          if git diff --quiet -- package-lock.json; then
-            echo "No changes in package-lock.json"
+          set -euo pipefail
+
+          # Commit only if there are changes (anywhere)
+          if git diff --quiet; then
+            echo "No changes to commit"
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add package-lock.json
+          git add -A
           git commit -m "chore: generate package-lock.json [skip ci]"
           git push
