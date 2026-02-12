@@ -14,6 +14,7 @@
 
 1. Kopiere `.env.example` zu `.env.local` und trage deine Firebase-Werte ein.
 2. Öffne `public/firebase-messaging-sw.js` und ersetze die Platzhalter (`VITE_FIREBASE_*`) durch dieselben Werte.
+   - Hinweis: Ohne Ersetzung wird Firebase im Service Worker nicht initialisiert. Optional kannst du das über einen Build-Schritt automatisieren.
 
 ---
 

@@ -100,7 +100,7 @@ REM Dateien hinzufügen
 echo.
 echo Füge Dateien hinzu...
 git add .
-git commit -m "Initial commit: TaskRai mit FCM und GitHub Actions" -m "- Google Login (Web + Android)" -m "- Push Notifications (FCM)" -m "- Task Management" -m "- GitHub Actions Workflows" -m "- Vollständige Dokumentation"
+git commit -m "Initial commit: TaskRai with FCM and GitHub Actions" -m "- Google Login (Web + Android)" -m "- Push Notifications (FCM)" -m "- Task Management" -m "- GitHub Actions workflows" -m "- Full documentation"
 
 echo ✅ Initial commit erstellt
 echo.

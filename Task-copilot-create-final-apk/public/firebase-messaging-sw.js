@@ -23,7 +23,7 @@ const hasPlaceholderConfig = Object.values(firebaseConfig).some((value) =>
 );
 
 if (hasPlaceholderConfig) {
-  console.warn('[firebase-messaging-sw.js] Firebase Platzhalter erkannt. Ersetze VITE_FIREBASE_* in firebase-messaging-sw.js mit echten Werten aus .env.local.');
+  console.warn('[firebase-messaging-sw.js] Firebase Platzhalter erkannt. Firebase wird nicht initialisiert, bis VITE_FIREBASE_* hier durch echte Werte ersetzt werden.');
 } else {
   firebase.initializeApp(firebaseConfig);
 
