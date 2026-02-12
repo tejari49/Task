@@ -166,7 +166,9 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       return;
     }
     hasInitializedRef.current = true;
-    void initializePushNotifications();
+    initializePushNotifications().catch((error) => {
+      console.error('Fehler bei Push Initialization:', error);
+    });
   }, [initializePushNotifications]);
 
   // Manuelle Permission Anfrage (für UI Button)
