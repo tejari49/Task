@@ -16,12 +16,11 @@ jobs:
       - name: 🛒 Checkout repository
         uses: actions/checkout@v4
 
-      - name: 🔧 Set up Node.js (Capacitor >= 8 needs Node >= 18)
+      - name: 🔧 Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: "npm"
-          cache-dependency-path: ${{ env.WORKDIR }}/package-lock.json
 
       - name: ☕ Set up Java
         uses: actions/setup-java@v4
@@ -35,18 +34,13 @@ jobs:
       - name: 📦 Install dependencies (npm)
         working-directory: ${{ env.WORKDIR }}
         run: |
-          echo "[INFO] Installing dependencies"
-          # Fallback if no package-lock.json exists
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            npm install
-          fi
+          echo "[INFO] Installing dependencies..."
+          npm install
 
       - name: ⚡ Build web assets (Vite -> dist)
         working-directory: ${{ env.WORKDIR }}
         run: |
-          echo "[INFO] Building web assets"
+          echo "[INFO] Building web assets..."
           npm run build
           echo "[INFO] dist content"
           ls -la dist
@@ -55,7 +49,7 @@ jobs:
       - name: 🌀 Capacitor Android sync
         working-directory: ${{ env.WORKDIR }}
         run: |
-          echo "[INFO] Syncing capacitor plugins"
+          echo "[INFO] Syncing capacitor plugins..."
           npx cap sync android
 
       - name: 🗝️ Make Gradlew executable
@@ -64,7 +58,7 @@ jobs:
       - name: 🛠️ Build Debug APK
         working-directory: ${{ env.WORKDIR }}/android
         run: |
-          echo "[INFO] Building Debug APK"
+          echo "[INFO] Building Debug APK..."
           ./gradlew assembleDebug
 
       - name: 🚚 Upload APK Artifact
