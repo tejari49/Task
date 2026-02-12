@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app'
-import { getAuth, GoogleAuthProvider, signInWithPopup } from 'firebase/auth'
+import { getAuth, GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from 'firebase/auth'
 import { getMessaging, getToken, onMessage } from 'firebase/messaging'
 import { getFirestore } from 'firebase/firestore'
 import { getDatabase } from 'firebase/database'
@@ -16,7 +16,7 @@ const getFirebaseConfig = () => {
     apiKey: "AIzaSyBrlDiaISY2hajF7LBvFkgdEcUMsRzQneQ",
     authDomain: "task-rai.firebaseapp.com",
     projectId: "task-rai",
-    storageBucket: "task-rai.firebasestorage.app",
+    storageBucket: "task-rai.appspot.com", // <-- korrigiert
     messagingSenderId: "99376901660",
     appId: "1:99376901660:web:87dac908af8143968d79d9",
     databaseURL: "https://task-rai.firebaseio.com",
@@ -185,7 +185,15 @@ export async function googleSignIn() {
   // ✅ Web Popup (oder Fallback für Android)
   try {
     console.log('🔐 Verwende Web Popup für Google Sign-In...')
-    
+
+    // === PATCH: Auth Persistenz robust setzen! ===
+    try {
+      await setPersistence(auth, browserLocalPersistence)
+    } catch (err) {
+      console.warn('⚠️ Konnte Auth-Persistenz nicht setzen:', err)
+    }
+    // === PATCH ENDE ===
+
     // Setze Custom Parameter für besseres UX
     googleProvider.setCustomParameters({
       'prompt': 'select_account'
