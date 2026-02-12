@@ -1,0 +1,116 @@
+name: Build Android APK (with native GoogleAuth checks)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-apk:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    env:
+      NODE_VERSION: '20'
+      GRADLE_OPTS: '-Dorg.gradle.jvmargs=-Xmx3g'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Set up Java (for Android build)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Ensure android/google-services.json (from secret)
+        id: ensure-google-services
+        run: |
+          set -e
+          if [ -f android/app/google-services.json ]; then
+            echo "google-services.json already in repo under android/app/"
+            echo "present=true" >> $GITHUB_OUTPUT
+          else
+            if [ -n "${{ secrets.GOOGLE_SERVICES_JSON }}" ]; then
+              echo "Writing google-services.json from secret"
+              echo "${{ secrets.GOOGLE_SERVICES_JSON }}" | base64 --decode > android/app/google-services.json
+              echo "present=true" >> $GITHUB_OUTPUT
+            else
+              echo "google-services.json not found in repo and secret GOOGLE_SERVICES_JSON is empty."
+              echo "present=false" >> $GITHUB_OUTPUT
+            fi
+          fi
+
+      - name: Fail early if google-services.json missing
+        if: steps.ensure-google-services.outputs.present == 'false'
+        run: |
+          echo "::error::android/app/google-services.json not found. Add it to the repo or add a base64-encoded GOOGLE_SERVICES_JSON secret."
+          exit 1
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Ensure native GoogleAuth plugin is present in package.json (install if missing)
+        run: |
+          set -e
+          if ! grep -q "@codetrix-studio/capacitor-google-auth" package.json; then
+            echo "Plugin @codetrix-studio/capacitor-google-auth not found in package.json. Installing temporarily..."
+            npm install @codetrix-studio/capacitor-google-auth --no-save
+          else
+            echo "Plugin declared in package.json"
+          fi
+          node -e "try{console.log(require('./package.json').dependencies['@codetrix-studio/capacitor-google-auth']||'not-declared')}catch(e){console.log('package.json read error',e)}"
+
+      - name: Run npx cap sync android
+        run: |
+          set -e
+          npx cap sync android
+        env:
+          VITE_GOOGLE_OAUTH_CLIENT_ID: ${{ secrets.VITE_GOOGLE_OAUTH_CLIENT_ID }}
+
+      - name: Build web assets (Vite) and Android (Gradle assemble)
+        run: |
+          set -e
+          npm run build
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug -Pandroid.testOnly=false
+        env:
+          VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}
+          VITE_FIREBASE_PROJECT_ID: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
+          VITE_FIREBASE_STORAGE_BUCKET: ${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}
+          VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}
+          VITE_FIREBASE_APP_ID: ${{ secrets.VITE_FIREBASE_APP_ID }}
+
+      - name: Find APK artifact
+        id: find-apk
+        run: |
+          set -e
+          APK_PATH=$(find android -type f -name "*-debug.apk" | head -n 1 || true)
+          if [ -z "$APK_PATH" ]; then
+            echo "::error::APK not found in expected locations"
+            ls -la android/app/build/outputs || true
+            exit 1
+          fi
+          echo "apk_path=$APK_PATH" >> $GITHUB_OUTPUT
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskrai-apk
+          path: ${{ steps.find-apk.outputs.apk_path }}
+
+      - name: Optional: Print Capacitor/Plugin check (for debugging)
+        if: ${{ always() }}
+        run: |
+          echo "You can now download the APK artifact from the Actions run."
+          echo "If you still get auth/cancelled-popup-request, ensure the native plugin is present on device and that SHA-1 and google-services.json are configured in Firebase."
