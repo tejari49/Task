@@ -1,4 +1,4 @@
-name: Build TaskRai APK (Debug)
+name: Build APK (Debug)
 
 on:
   workflow_dispatch:
@@ -15,10 +15,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
+      - name: Set up Node.js (>=22 required by Capacitor)
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: ${{ env.WORKDIR }}/package-lock.json
 
       - name: Set up Java
         uses: actions/setup-java@v4
@@ -38,50 +40,15 @@ jobs:
             npm install
           fi
 
-      - name: Build web assets (create ./dist)
+      - name: Build web assets (Vite -> dist)
         working-directory: ${{ env.WORKDIR }}
         run: |
           set -e
-          echo "==> repo content"
-          ls -la
-
-          # 1) If a build script exists, run it (Vite/React/Angular/etc.)
-          if node -e "const p=require('./package.json'); process.exit(p.scripts && p.scripts.build ? 0 : 1)"; then
-            echo "==> npm run build"
-            npm run build
-          else
-            echo "==> Kein npm script 'build' gefunden – baue dist als Fallback."
-          fi
-
-          # 2) Hard guarantee: Capacitor needs webDir (often 'dist') with an index.html.
-          mkdir -p dist
-
-          # If build did not generate dist/index.html, create a minimal dist from existing sources.
-          if [ ! -f dist/index.html ]; then
-            echo "==> dist/index.html fehlt – erstelle Fallback index.html"
-
-            # Prefer Vite-style root index.html
-            if [ -f index.html ]; then
-              cp index.html dist/index.html
-            # Or single-file app variant
-            elif [ -f TimeRoster.html ]; then
-              cp TimeRoster.html dist/index.html
-            # Or static web root
-            elif [ -f public/index.html ]; then
-              cp public/index.html dist/index.html
-            else
-              echo "ERROR: Keine index.html/TimeRoster.html gefunden. Lege eine index.html an oder setze webDir korrekt."
-              exit 1
-            fi
-          fi
-
-          # Copy common static assets if present (service worker MUST be at web root)
-          if [ -d public ]; then
-            cp -R public/* dist/ || true
-          fi
-
+          echo "==> npm run build"
+          npm run build
           echo "==> dist content"
           ls -la dist
+          test -f dist/index.html
 
       - name: Capacitor sync Android
         working-directory: ${{ env.WORKDIR }}
