@@ -11,7 +11,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   const [isSupported, setIsSupported] = useState(false);
   const onNotificationReceivedRef = useRef(null);
   const onTokenReceivedRef = useRef(null);
-  const hasInitializedRef = useRef(false);
+  const initializationPromiseRef = useRef(null);
   const pushNotificationsRef = useRef(null);
   const foregroundUnsubscribeRef = useRef(null);
 
@@ -38,6 +38,13 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   }, []);
 
   // Android Push Setup
+  const clearForegroundSubscription = useCallback(() => {
+    if (foregroundUnsubscribeRef.current) {
+      foregroundUnsubscribeRef.current();
+      foregroundUnsubscribeRef.current = null;
+    }
+  }, []);
+
   const setupCapacitorPush = useCallback(async (pushNotifications) => {
     try {
       // Permission anfragen
@@ -120,9 +127,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       }
 
       // Foreground Messages für Web
-      if (foregroundUnsubscribeRef.current) {
-        foregroundUnsubscribeRef.current();
-      }
+      clearForegroundSubscription();
       foregroundUnsubscribeRef.current = onForegroundMessage((payload) => {
         console.log('Web Push empfangen (foreground):', payload);
         
@@ -150,7 +155,7 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
       setIsSupported(false);
       return false;
     }
-  }, []);
+  }, [clearForegroundSubscription]);
 
   const initializePushNotifications = useCallback(async () => {
     // Prüfe ob wir in Capacitor (Android) oder Browser sind
@@ -170,24 +175,18 @@ export function usePushNotifications({ onNotificationReceived, onTokenReceived }
   }, [loadPushNotifications, setupCapacitorPush, setupWebPush]);
 
   useEffect(() => {
-    if (hasInitializedRef.current) {
+    if (initializationPromiseRef.current) {
       return;
     }
-    hasInitializedRef.current = true;
-    initializePushNotifications().catch((error) => {
+    initializationPromiseRef.current = initializePushNotifications().catch((error) => {
       console.error('Push notification initialization failed. Check browser compatibility and Firebase configuration:', error);
       setIsSupported(false);
     });
   }, [initializePushNotifications]);
 
   useEffect(() => {
-    return () => {
-      if (foregroundUnsubscribeRef.current) {
-        foregroundUnsubscribeRef.current();
-        foregroundUnsubscribeRef.current = null;
-      }
-    };
-  }, []);
+    return () => clearForegroundSubscription();
+  }, [clearForegroundSubscription]);
 
   // Manuelle Permission Anfrage (für UI Button)
   const requestPermission = useCallback(async () => {
