@@ -115,7 +115,13 @@ export default function App() {
 
   const handleLogin = async () => {
     setAuthError('');
-    
+
+    // Wichtig: Anmeldung NUR für native Android erlauben
+    if (!isAndroid()) {
+      setAuthError('Anmeldung nur über die native Android-App möglich. Bitte nutze die Android-App (Capacitor).');
+      return;
+    }
+
     if (!isFirebaseConfigured()) {
       setAuthError('Firebase ist nicht konfiguriert!');
       return;
@@ -127,16 +133,19 @@ export default function App() {
     }
     
     try {
+      // Für Android wird firebase.googleSignIn zuerst native versuchen (siehe src/firebase.js)
       const result = await googleSignIn();
       setIsAuthenticated(true);
       
-      if (isAndroid()) {
+      // Android: FCM token nativ abrufen
+      try {
         await getAndroidFCMToken();
-      } else {
-        await requestFCMToken();
+      } catch (e) {
+        console.warn('FCM Token Abruf (Android) fehlgeschlagen:', e?.message || e);
       }
     } catch (error) {
-      setAuthError('Anmeldung fehlgeschlagen: ' + error.message);
+      // Fehler direkt dem Nutzer anzeigen
+      setAuthError('Anmeldung fehlgeschlagen: ' + (error?.message || error));
     }
   };
 
@@ -245,12 +254,24 @@ export default function App() {
           <Smartphone size={40} className="text-white" />
         </div>
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">TaskRai</h1>
-        <p className="text-gray-500 dark:text-gray-400 mb-12">Organisiere dein Leben.<br/>Verbinde dich mit Freunden.</p>
+        <p className="text-gray-500 dark:text-gray-400 mb-6">Organisiere dein Leben.<br/>Verbinde dich mit Freunden.</p>
+
         <div className="space-y-4">
-          <button onClick={handleLogin} className="w-full bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-xl flex items-center justify-center gap-3 shadow-sm hover:shadow-md transition-all active:scale-95 group">
+          <button
+            onClick={handleLogin}
+            disabled={!isAndroid()}
+            className={`w-full ${!isAndroid() ? 'opacity-60 cursor-not-allowed' : ''} bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 p-4 rounded-xl flex items-center justify-center gap-3 shadow-sm hover:shadow-md transition-all active:scale-95 group`}
+          >
             <img src="https://www.svgrepo.com/show/475656/google-color.svg" className="w-6 h-6 group-hover:scale-110 transition-transform" alt="Google" />
-            <span className="font-semibold text-gray-700 dark:text-white">Mit Google anmelden</span>
+            <span className="font-semibold text-gray-700 dark:text-white">{isAndroid() ? 'Mit Google anmelden' : 'Mit Google anmelden (nur Android)'} </span>
           </button>
+
+          {!isAndroid() && (
+            <p className="text-sm text-center text-gray-500">
+              Die Web-Version unterstützt aktuell keine Anmeldung. Bitte öffne die native Android-App (Capacitor) auf deinem Gerät.
+            </p>
+          )}
+
           {authError && <p className="text-xs text-center text-red-500">{authError}</p>}
           <p className="text-xs text-center text-gray-400 mt-6 max-w-xs mx-auto">Mit der Anmeldung akzeptierst du unsere Nutzungsbedingungen.</p>
         </div>
