@@ -9,6 +9,10 @@ jobs:
   build-apk:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        shell: bash
+
     steps:
       - name: 🛒 Checkout repository
         uses: actions/checkout@v4
@@ -29,23 +33,36 @@ jobs:
       - name: 📱 Set up Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: 📦 Install dependencies
+      - name: 📦 Install dependencies (ci if lock exists, else install)
         working-directory: Task-copilot-create-final-apk
         run: |
-          echo "[INFO] Installing dependencies..."
-          npm ci
+          set -euo pipefail
+          echo "[INFO] Node: $(node -v)"
+          echo "[INFO] NPM : $(npm -v)"
+          if [ -f package-lock.json ]; then
+            echo "[INFO] package-lock.json found -> npm ci"
+            npm ci
+          else
+            echo "[WARN] package-lock.json missing -> npm install (and generating lock)"
+            npm install
+            echo "[INFO] Generated lockfile:"
+            ls -la package-lock.json || true
+          fi
 
       - name: ⚡ Build web assets (z.B. Vite -> dist)
         working-directory: Task-copilot-create-final-apk
         run: |
+          set -euo pipefail
           echo "[INFO] Building web assets..."
           npm run build
-          ls -la dist
+          echo "[INFO] dist contents:"
+          ls -la dist || true
           test -f dist/index.html
 
       - name: 🌀 Capacitor Android sync
         working-directory: Task-copilot-create-final-apk
         run: |
+          set -euo pipefail
           echo "[INFO] Syncing capacitor plugins..."
           npx cap sync android
 
@@ -55,11 +72,13 @@ jobs:
       - name: 🛠️ Build Debug APK
         working-directory: Task-copilot-create-final-apk/android
         run: |
+          set -euo pipefail
           echo "[INFO] Building Debug APK..."
-          ./gradlew assembleDebug
+          ./gradlew --no-daemon assembleDebug
 
       - name: 🚚 Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: taskrai-debug-apk
           path: Task-copilot-create-final-apk/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
