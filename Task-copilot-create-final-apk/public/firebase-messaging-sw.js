@@ -5,7 +5,8 @@ importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js'
 importScripts('https://www.gstatic.com/firebasejs/10.7.1/firebase-messaging-compat.js');
 
 // Firebase Konfiguration - MUSS mit deiner .env.local übereinstimmen
-// WICHTIG: Ersetze die Platzhalter (VITE_FIREBASE_*) mit den Werten aus deiner .env.local, da .env hier nicht verfügbar ist
+// WICHTIG: Ersetze die Platzhalter (VITE_FIREBASE_*) mit den echten Werten aus deiner .env.local, da .env hier nicht verfügbar ist
+// Beispiel: apiKey: "<dein-api-key>", authDomain: "<dein-projekt>.firebaseapp.com"
 const firebaseConfig = {
   apiKey: "VITE_FIREBASE_API_KEY",
   authDomain: "VITE_FIREBASE_AUTH_DOMAIN",
@@ -20,7 +21,7 @@ const hasPlaceholderConfig = Object.values(firebaseConfig).some((value) =>
 );
 
 if (hasPlaceholderConfig) {
-  console.warn('[firebase-messaging-sw.js] Firebase Platzhalter erkannt. Bitte Werte aus .env.local eintragen.');
+  console.warn('[firebase-messaging-sw.js] Firebase Platzhalter erkannt. Ersetze VITE_FIREBASE_* in firebase-messaging-sw.js mit echten Werten aus .env.local.');
 } else {
   firebase.initializeApp(firebaseConfig);
 
