@@ -1,47 +1,78 @@
-{
-  "project_info": {
-    "project_number": "99376901660",
-    "project_id": "task-rai",
-    "storage_bucket": "task-rai.firebasestorage.app"
-  },
-  "client": [
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:99376901660:android:853c4f54be3b5e0e8d79d9",
-        "android_client_info": {
-          "package_name": "com.irajet.task"
-        }
-      },
-      "oauth_client": [
-        {
-          "client_id": "99376901660-kcf54oip9bs9tdurv4jjk4nnh6hro131.apps.googleusercontent.com",
-          "client_type": 1,
-          "android_info": {
-            "package_name": "com.irajet.task",
-            "certificate_hash": "8b14eb1378e5014c65471e2dc259ba5ed4e0c1ba"
-          }
-        },
-        {
-          "client_id": "99376901660-4su6836vocq97tj87rgibkpkj512hgsd.apps.googleusercontent.com",
-          "client_type": 3
-        }
-      ],
-      "api_key": [
-        {
-          "current_key": "AIzaSyDMYgxeL7x8J0ceT4yYduhnjYn12CpnRWY"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": [
-            {
-              "client_id": "99376901660-4su6836vocq97tj87rgibkpkj512hgsd.apps.googleusercontent.com",
-              "client_type": 3
-            }
-          ]
-        }
-      }
-    }
-  ],
-  "configuration_version": "1"
-}
+name: Build APK (Debug)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main", "master"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      WORKDIR: Task-copilot-create-final-apk
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js (>=22 required by Capacitor)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: ${{ env.WORKDIR }}/package-lock.json
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "21"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies (npm)
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "[INFO] Installing dependencies"
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Build web assets (Vite -> dist)
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "[INFO] Building web assets"
+          npm run build
+          echo "[INFO] dist content"
+          ls -la dist
+          test -f dist/index.html
+
+      - name: Capacitor sync Android
+        working-directory: ${{ env.WORKDIR }}
+        run: |
+          echo "[INFO] Capacitor sync android"
+          npx cap sync android || { echo "::error::Capacitor sync failed"; exit 1; }
+
+      - name: Make Gradlew executable
+        run: chmod +x ${{ env.WORKDIR }}/android/gradlew
+
+      - name: Build Debug APK
+        working-directory: ${{ env.WORKDIR }}/android
+        run: |
+          echo "[INFO] Building debug APK"
+          ./gradlew assembleDebug || { echo "::error::Gradle build failed"; exit 1; }
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskrai-debug-apk
+          path: ${{ env.WORKDIR }}/android/app/build/outputs/apk/debug/*.apk
+
+      - name: 🎯 Show APK path & plugins
+        run: |
+          echo "[INFO] APK should be in ${{ env.WORKDIR }}/android/app/build/outputs/apk/debug/"
+          echo "[INFO] Capacitor plugins (from package.json):"
+          cat ${{ env.WORKDIR }}/package.json | grep capacitor
