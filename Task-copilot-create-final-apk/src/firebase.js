@@ -9,9 +9,7 @@ const isCapacitor = () => typeof window !== 'undefined' && !!window.Capacitor
 const getCapacitorPlatform = () => {
   try {
     if (typeof window === 'undefined' || !window.Capacitor) return null
-    // Capacitor has getPlatform() in many versions
     if (typeof window.Capacitor.getPlatform === 'function') return window.Capacitor.getPlatform()
-    // fallback to older property
     return window.Capacitor?.platform?.name || null
   } catch (e) {
     console.warn('Error while reading Capacitor platform:', e)
@@ -31,7 +29,7 @@ const getFirebaseConfig = () => {
     apiKey: "AIzaSyBrlDiaISY2hajF7LBvFkgdEcUMsRzQneQ",
     authDomain: "task-rai.firebaseapp.com",
     projectId: "task-rai",
-    storageBucket: "task-rai.appspot.com",
+    storageBucket: "task-rai.appspot.com", // KORREKT!
     messagingSenderId: "99376901660",
     appId: "1:99376901660:web:87dac908af8143968d79d9",
     databaseURL: "https://task-rai.firebaseio.com",
