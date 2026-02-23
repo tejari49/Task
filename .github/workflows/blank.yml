@@ -1,13 +1,13 @@
-name: Unzip pung-pong.zip -> PR
+name: Unzip pung-pong.zip to root (PR)
 
 on:
   push:
     branches: ["main"]
-    # läuft nur, wenn das ZIP in main geändert wurde (verhindert Schleifen)
     paths:
       - "pung-pong.zip"
+      - "Task/pung-pong.zip"
       - "**/pung-pong.zip"
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -18,46 +18,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  unzip_and_pr:
-    # Extra-Schutz: niemals auf PR-Branches laufen lassen
+  unzip_to_root_pr:
     if: github.ref == 'refs/heads/main' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (inkl. LFS)
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           lfs: true
 
-      - name: Git LFS pull (falls ZIP via LFS kommt)
-        run: |
-          set -euo pipefail
-          git lfs install
-          git lfs pull || true
-
-      - name: Tools installieren
+      - name: Install unzip + rsync
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y unzip rsync
 
-      - name: ZIP finden (pung-pong.zip)
-        id: zip
+      - name: Find pung-pong.zip
+        id: pick
         run: |
           set -euo pipefail
 
-          echo "📁 Repo-Root Inhalt:"
-          ls -la
-
-          CANDIDATES=("pung-pong.zip" "Task/pung-pong.zip")
           ZIP_PATH=""
-
-          for c in "${CANDIDATES[@]}"; do
-            if [[ -f "$c" ]]; then
-              ZIP_PATH="$c"
-              break
-            fi
+          for p in "pung-pong.zip" "Task/pung-pong.zip"; do
+            if [[ -f "$p" ]]; then ZIP_PATH="$p"; break; fi
           done
 
           if [[ -z "$ZIP_PATH" ]]; then
@@ -65,79 +50,44 @@ jobs:
           fi
 
           if [[ -z "$ZIP_PATH" ]]; then
-            echo "❌ pung-pong.zip nicht gefunden." >&2
-            echo "Tipp: liegt es wirklich im Repo? (Root oder Unterordner)" >&2
+            echo "pung-pong.zip not found" >&2
             exit 1
           fi
 
-          echo "✅ ZIP gefunden: $ZIP_PATH"
-          file "$ZIP_PATH" || true
-
           echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+          echo "Using ZIP: $ZIP_PATH"
 
-      - name: ZIP validieren + Listing
+      - name: Unzip -> root (flatten if single top-level folder)
         run: |
           set -euo pipefail
-          ZIP_PATH="${{ steps.zip.outputs.zip_path }}"
-
-          echo "🧪 ZIP Test:"
-          unzip -t "$ZIP_PATH"
-
-          echo "📦 ZIP Inhalt (erste 200 Zeilen):"
-          unzip -l "$ZIP_PATH" | head -n 200
-
-      - name: Entpacken + Merge in Repo-Root (Flatten wenn 1 Top-Level-Ordner)
-        run: |
-          set -euo pipefail
-          ZIP_PATH="${{ steps.zip.outputs.zip_path }}"
+          ZIP_PATH="${{ steps.pick.outputs.zip_path }}"
           WORK="${RUNNER_TEMP}/unzip_work"
 
           rm -rf "$WORK"
           mkdir -p "$WORK"
 
-          echo "📦 Entpacke '$ZIP_PATH' nach '$WORK'..."
           unzip -q -o "$ZIP_PATH" -d "$WORK"
-
-          echo "🔎 Top-Level nach Entpacken:"
-          ls -la "$WORK"
 
           shopt -s dotglob nullglob
           entries=("$WORK"/*)
 
-          if [[ ${#entries[@]} -eq 0 ]]; then
-            echo "❌ ZIP entpackt, aber Workdir ist leer." >&2
-            exit 1
-          fi
-
           if [[ ${#entries[@]} -eq 1 && -d "${entries[0]}" ]]; then
             SRC="${entries[0]}"
-            echo "📁 Flatten aktiv: $(basename "$SRC")"
           else
             SRC="$WORK"
-            echo "📁 Kein Flatten (mehrere Top-Level-Items)"
           fi
 
-          echo "➡️ Merge von '$SRC/' nach Repo-Root './' (exclude nur .git)"
-          rsync -a --exclude ".git/" "$SRC/" "./"
+          # Merge/overwrite into repo root
+          rsync -a "${SRC}/" "./"
 
-          echo "🧾 Git Status (sollte Änderungen zeigen):"
           git status --porcelain || true
 
       - name: Create Pull Request
-        id: cpr
         uses: peter-evans/create-pull-request@v8
         with:
           branch: "auto/unzip-pung-pong"
           delete-branch: true
-          commit-message: "Unzip pung-pong.zip into repository root"
-          title: "Unzip pung-pong.zip in Repo-Root"
+          commit-message: "Unzip pung-pong.zip to repository root"
+          title: "Unzip pung-pong.zip to repository root"
           body: |
-            Automatisch erzeugter PR:
-            - Entpackt: `${{ steps.zip.outputs.zip_path }}`
-            - Merged in: Repo-Root
-            - Flatten: wenn ZIP nur einen Top-Level-Ordner enthält
-
-      - name: Ausgabe PR-URL
-        if: ${{ steps.cpr.outputs.pull-request-url }}
-        run: |
-          echo "✅ PR: ${{ steps.cpr.outputs.pull-request-url }}"
+            Automatically unzipped `${{ steps.pick.outputs.zip_path }}` into the repository root.
