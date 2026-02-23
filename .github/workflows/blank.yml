@@ -1,73 +1,40 @@
-# This is a basic workflow to help you get started with Actions
-
-name: CI
-
-# Controls when the workflow will run
-on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-
-  # Allows you to run this workflow manually from the Actions tab
-  workflow_dispatch:
-
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
-jobs:
-  # This workflow contains a single job called "build"
-  build:
-    # The type of runner that the job will run on
-    runs-on: ubuntu-latest
-
-    # Steps represent a sequence of tasks that will be executed as part of the job
-    steps:
-      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v4
-
-      # Runs a single command using the runners shell
-      - name: Run a one-line script
-        run: echo Hello, world!
-
-      # Runs a set of commands using the runners shell
-      - name: Run a multi-line script
-        run: |
-          echo Add other actions to build,
-          echo test, and deploy your project.
-name: Unzip ZIP aus Repo-Root (und ins Repo schreiben)
+name: Unzip pung-pong.zip -> PR
 
 on:
   push:
     branches: ["main"]
-  workflow_dispatch:
-    inputs:
-      zip_name:
-        description: "ZIP-Dateiname im Repo-Root (leer = neueste *.zip)"
-        required: false
-        default: ""
-      commit_changes:
-        description: "Entpackte Dateien ins Repo committen? (true/false)"
-        required: false
-        default: "true"
-      delete_zip:
-        description: "ZIP nach Entpacken löschen? (true/false)"
-        required: false
-        default: "false"
+    # läuft nur, wenn das ZIP in main geändert wurde (verhindert Schleifen)
+    paths:
+      - "pung-pong.zip"
+      - "**/pung-pong.zip"
+  workflow_dispatch: {}
 
 permissions:
   contents: write
+  pull-requests: write
+
+concurrency:
+  group: unzip-pung-pong-pr
+  cancel-in-progress: true
 
 jobs:
-  unzip:
-    if: github.actor != 'github-actions[bot]'
+  unzip_and_pr:
+    # Extra-Schutz: niemals auf PR-Branches laufen lassen
+    if: github.ref == 'refs/heads/main' && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (inkl. LFS falls ZIP via LFS kommt)
+      - name: Checkout (inkl. LFS)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           lfs: true
+
+      - name: Git LFS pull (falls ZIP via LFS kommt)
+        run: |
+          set -euo pipefail
+          git lfs install
+          git lfs pull || true
 
       - name: Tools installieren
         run: |
@@ -75,111 +42,102 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y unzip rsync
 
-      - name: ZIP auswählen (Input oder neueste *.zip)
-        id: pick
+      - name: ZIP finden (pung-pong.zip)
+        id: zip
         run: |
           set -euo pipefail
 
           echo "📁 Repo-Root Inhalt:"
           ls -la
 
-          ZIP_INPUT="${{ github.event_name == 'workflow_dispatch' && inputs.zip_name || '' }}"
+          CANDIDATES=("pung-pong.zip" "Task/pung-pong.zip")
+          ZIP_PATH=""
 
-          if [[ -n "${ZIP_INPUT}" ]]; then
-            if [[ ! -f "${ZIP_INPUT}" ]]; then
-              echo "❌ ZIP '${ZIP_INPUT}' nicht gefunden im Repo-Root." >&2
-              exit 1
+          for c in "${CANDIDATES[@]}"; do
+            if [[ -f "$c" ]]; then
+              ZIP_PATH="$c"
+              break
             fi
-            ZIP_FILE="${ZIP_INPUT}"
-          else
-            ZIP_FILE="$(ls -t *.zip 2>/dev/null | head -n 1 || true)"
-            if [[ -z "${ZIP_FILE}" ]]; then
-              echo "❌ Keine *.zip im Repo-Root gefunden." >&2
-              exit 1
-            fi
+          done
+
+          if [[ -z "$ZIP_PATH" ]]; then
+            ZIP_PATH="$(git ls-files | grep -E '(^|/)pung-pong\.zip$' | head -n 1 || true)"
           fi
 
-          echo "✅ Verwende ZIP: ${ZIP_FILE}"
-          file "${ZIP_FILE}" || true
-          echo "zip_file=${ZIP_FILE}" >> "$GITHUB_OUTPUT"
+          if [[ -z "$ZIP_PATH" ]]; then
+            echo "❌ pung-pong.zip nicht gefunden." >&2
+            echo "Tipp: liegt es wirklich im Repo? (Root oder Unterordner)" >&2
+            exit 1
+          fi
 
-      - name: ZIP validieren + Inhalt anzeigen
+          echo "✅ ZIP gefunden: $ZIP_PATH"
+          file "$ZIP_PATH" || true
+
+          echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+
+      - name: ZIP validieren + Listing
         run: |
           set -euo pipefail
-          ZIP_FILE="${{ steps.pick.outputs.zip_file }}"
+          ZIP_PATH="${{ steps.zip.outputs.zip_path }}"
 
-          echo "🧪 unzip -t (Test der ZIP):"
-          unzip -t "${ZIP_FILE}"
+          echo "🧪 ZIP Test:"
+          unzip -t "$ZIP_PATH"
 
-          echo "📦 unzip -l (Listing):"
-          unzip -l "${ZIP_FILE}" | head -n 200
+          echo "📦 ZIP Inhalt (erste 200 Zeilen):"
+          unzip -l "$ZIP_PATH" | head -n 200
 
-      - name: Entpacken nach Temp + in Repo-Root mergen (Flatten wenn 1 Top-Level-Ordner)
+      - name: Entpacken + Merge in Repo-Root (Flatten wenn 1 Top-Level-Ordner)
         run: |
           set -euo pipefail
-          ZIP_FILE="${{ steps.pick.outputs.zip_file }}"
+          ZIP_PATH="${{ steps.zip.outputs.zip_path }}"
           WORK="${RUNNER_TEMP}/unzip_work"
 
-          rm -rf "${WORK}"
-          mkdir -p "${WORK}"
+          rm -rf "$WORK"
+          mkdir -p "$WORK"
 
-          echo "📦 Entpacke '${ZIP_FILE}' nach '${WORK}'..."
-          unzip -q -o "${ZIP_FILE}" -d "${WORK}"
+          echo "📦 Entpacke '$ZIP_PATH' nach '$WORK'..."
+          unzip -q -o "$ZIP_PATH" -d "$WORK"
 
           echo "🔎 Top-Level nach Entpacken:"
-          ls -la "${WORK}"
+          ls -la "$WORK"
 
           shopt -s dotglob nullglob
-          entries=("${WORK}"/*)
+          entries=("$WORK"/*)
+
+          if [[ ${#entries[@]} -eq 0 ]]; then
+            echo "❌ ZIP entpackt, aber Workdir ist leer." >&2
+            exit 1
+          fi
 
           if [[ ${#entries[@]} -eq 1 && -d "${entries[0]}" ]]; then
             SRC="${entries[0]}"
-            echo "📁 Flatten: genau 1 Top-Level-Ordner -> $(basename "${SRC}")"
+            echo "📁 Flatten aktiv: $(basename "$SRC")"
           else
-            SRC="${WORK}"
-            echo "📁 Mehrere Top-Level-Items -> direkt mergen"
+            SRC="$WORK"
+            echo "📁 Kein Flatten (mehrere Top-Level-Items)"
           fi
 
-          echo "➡️ Merge von '${SRC}/' nach Repo-Root './' (exclude nur .git)"
-          rsync -a \
-            --exclude ".git/" \
-            "${SRC}/" "./"
+          echo "➡️ Merge von '$SRC/' nach Repo-Root './' (exclude nur .git)"
+          rsync -a --exclude ".git/" "$SRC/" "./"
 
-          echo "✅ Nach Merge: kurzer Überblick (maxdepth 3)"
-          find . -maxdepth 3 -type f | head -n 200
-
-          echo "🧾 Git Status:"
+          echo "🧾 Git Status (sollte Änderungen zeigen):"
           git status --porcelain || true
 
-      - name: Optional ZIP löschen
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.delete_zip == 'true' }}
+      - name: Create Pull Request
+        id: cpr
+        uses: peter-evans/create-pull-request@v8
+        with:
+          branch: "auto/unzip-pung-pong"
+          delete-branch: true
+          commit-message: "Unzip pung-pong.zip into repository root"
+          title: "Unzip pung-pong.zip in Repo-Root"
+          body: |
+            Automatisch erzeugter PR:
+            - Entpackt: `${{ steps.zip.outputs.zip_path }}`
+            - Merged in: Repo-Root
+            - Flatten: wenn ZIP nur einen Top-Level-Ordner enthält
+
+      - name: Ausgabe PR-URL
+        if: ${{ steps.cpr.outputs.pull-request-url }}
         run: |
-          set -euo pipefail
-          ZIP_FILE="${{ steps.pick.outputs.zip_file }}"
-          rm -f "${ZIP_FILE}"
-          echo "🗑️ ZIP gelöscht: ${ZIP_FILE}"
-
-      - name: Commit + Push (push=immer, dispatch=nach Input)
-        env:
-          COMMIT_CHANGES: ${{ github.event_name == 'push' && 'true' || inputs.commit_changes }}
-        run: |
-          set -euo pipefail
-
-          if [[ "${COMMIT_CHANGES}" != "true" ]]; then
-            echo "ℹ️ commit_changes=false -> Entpacken war nur im Runner (Repo bleibt unverändert)."
-            exit 0
-          fi
-
-          if git diff --quiet && git diff --cached --quiet; then
-            echo "ℹ️ Keine Änderungen zum Commit."
-            exit 0
-          fi
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          git add -A
-          git commit -m "Unzip archive into repository root [skip ci]"
-          git push
-
-          echo "✅ Änderungen committed & gepusht."
+          echo "✅ PR: ${{ steps.cpr.outputs.pull-request-url }}"
