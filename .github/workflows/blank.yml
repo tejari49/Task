@@ -1,183 +1,71 @@
-name: Unzip pung-pong.zip to root (PR)
-
+name: Unpack ZIP into repo
 on:
   push:
-    branches: ["main"]
     paths:
-      - "pung-pong.zip"
+      - 'zips/**.zip'
   workflow_dispatch:
+    inputs:
+      zip_path:
+        description: 'Path to zip file in repo (relative), e.g. zips/archive.zip'
+        required: false
+        default: 'zips/archive.zip'
 
 permissions:
   contents: write
-  pull-requests: write
-
-concurrency:
-  group: unzip-pung-pong-pr
-  cancel-in-progress: true
 
 jobs:
-  unzip_to_root_pr:
-    if: github.ref == 'refs/heads/main' && github.actor != 'github-actions[bot]'
+  unzip:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          lfs: true
+          persist-credentials: true
 
-      - name: Install tools (unzip, rsync, git-lfs)
+      - name: Ensure unzip is installed
+        run: sudo apt-get update && sudo apt-get install -y unzip
+
+      - name: Determine ZIP path
+        id: vars
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y unzip rsync git-lfs
-
-      - name: Ensure LFS files are real (not pointers)
-        run: |
-          set -euo pipefail
-          git lfs install
-          git lfs pull || true
-
-      - name: Create working branch
-        id: branch
-        run: |
-          set -euo pipefail
-          BR="auto/unzip-pung-pong-${GITHUB_RUN_ID}"
-          echo "branch=$BR" >> "$GITHUB_OUTPUT"
-          git checkout -b "$BR"
-
-      - name: Verify ZIP exists and is a real ZIP
-        run: |
-          set -euo pipefail
-
-          if [[ ! -f "pung-pong.zip" ]]; then
-            echo "❌ pung-pong.zip not found in repo root." >&2
-            echo "Root listing:" >&2
-            ls -la >&2
-            exit 1
-          fi
-
-          echo "✅ Found pung-pong.zip"
-          ls -lah pung-pong.zip
-          file pung-pong.zip || true
-
-          echo "🔎 First 16 bytes:"
-          xxd -l 16 pung-pong.zip || true
-
-          # If it's an LFS pointer, it will be a small text file starting with "version https://git-lfs..."
-          if head -n 2 pung-pong.zip | grep -q "git-lfs.github.com/spec"; then
-            echo "❌ pung-pong.zip is still an LFS pointer (not downloaded). Check LFS settings." >&2
-            exit 1
-          fi
-
-          echo "🧪 unzip test:"
-          unzip -t pung-pong.zip
-
-          echo "📦 zip listing (first 200 lines):"
-          unzip -l pung-pong.zip | head -n 200
-
-      - name: Unzip -> root (flatten even with __MACOSX)
-        run: |
-          set -euo pipefail
-
-          WORK="${RUNNER_TEMP}/unzip_work"
-          rm -rf "$WORK"
-          mkdir -p "$WORK"
-
-          unzip -q -o pung-pong.zip -d "$WORK"
-
-          echo "🔎 Top-level after unzip:"
-          ls -la "$WORK"
-
-          shopt -s dotglob nullglob
-          entries=("$WORK"/*)
-
-          # Filter out MacOS junk for flatten decision
-          filtered=()
-          for e in "${entries[@]}"; do
-            base="$(basename "$e")"
-            if [[ "$base" == "__MACOSX" || "$base" == ".DS_Store" ]]; then
-              continue
+          ZIP=""
+          if [ "${{ github.event_name }}" = "push" ]; then
+            ZIP=$(git diff --name-only HEAD^ HEAD | grep -E '\.zip$' | head -n1 || true)
+            if [ -z "$ZIP" ]; then
+              ZIP=$(git ls-files '*.zip' | head -n1 || true)
             fi
-            filtered+=("$e")
-          done
-
-          if [[ ${#filtered[@]} -eq 0 ]]; then
-            echo "❌ Unzipped content is empty (after filtering)." >&2
-            exit 1
-          fi
-
-          if [[ ${#filtered[@]} -eq 1 && -d "${filtered[0]}" ]]; then
-            SRC="${filtered[0]}"
-            echo "📁 Flatten: using single top-level folder: $(basename "$SRC")"
           else
-            SRC="$WORK"
-            echo "📁 No flatten: multiple top-level items"
+            ZIP="${{ github.event.inputs.zip_path }}"
           fi
+          echo "zip_path=${ZIP}" >> $GITHUB_OUTPUT
 
-          # Safety: never allow a .git folder from zip to interfere
-          rm -rf "$SRC/.git" "$WORK/.git" || true
+      - name: Fail if no ZIP found
+        if: steps.vars.outputs.zip_path == ''
+        run: |
+          echo "No zip file found to unzip. Provide one under zips/ or specify zip_path on workflow_dispatch."
+          exit 1
 
-          echo "➡️ Merge into repo root..."
-          rsync -a "${SRC}/" "./"
-
-          echo "🧾 Git status (normal):"
-          git status --porcelain || true
-
-          echo "🧾 Git status (including ignored):"
-          git status --porcelain --ignored || true
-
-      - name: Commit changes (force-add everything)
+      - name: Unpack archive into repo root
         run: |
           set -euo pipefail
+          ZIP="${{ steps.vars.outputs.zip_path }}"
+          echo "Unzipping: $ZIP"
+          TMPDIR=$(mktemp -d)
+          unzip -o "$ZIP" -d "$TMPDIR"
+          cp -r "$TMPDIR/." .
+          rm -rf "$TMPDIR"
 
+      - name: Commit & push extracted files
+        run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Force add (also adds ignored files if they were extracted)
-          git add -A --force
-
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
           if git diff --cached --quiet; then
-            echo "⚠️ No changes to commit. Either ZIP content matches repo OR everything is identical." >&2
-            echo "Tip: check the 'zip listing' step to see what it contains." >&2
-            exit 1
+            echo "No changes to commit."
+            exit 0
           fi
-
-          git commit -m "Unzip pung-pong.zip to repository root"
-          git push --set-upstream origin "${{ steps.branch.outputs.branch }}"
-
-      - name: Create PR (GitHub API)
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
-            const head = `${owner}:${{ steps.branch.outputs.branch }}`;
-            const base = "main";
-
-            // Check if PR already exists
-            const existing = await github.rest.pulls.list({
-              owner, repo, state: "open", head, base
-            });
-
-            if (existing.data.length > 0) {
-              core.info(`PR already exists: #${existing.data[0].number}`);
-              return;
-            }
-
-            const pr = await github.rest.pulls.create({
-              owner,
-              repo,
-              head: `${{ steps.branch.outputs.branch }}`,
-              base,
-              title: "Unzip pung-pong.zip to repository root",
-              body: [
-                "Automatisch erzeugter PR.",
-                "",
-                "- Quelle: `pung-pong.zip`",
-                "- Ziel: Repo-Root",
-                "- Flatten: aktiv, falls ZIP nur einen Top-Level-Ordner enthält (Mac-Junk wie __MACOSX wird ignoriert)."
-              ].join("\n")
-            });
-
-            core.info(`Created PR: ${pr.data.html_url}`);
+          git commit -m "Unpack ${{ steps.vars.outputs.zip_path }} via GitHub Actions"
+          git push
