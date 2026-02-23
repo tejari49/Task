@@ -1,4 +1,4 @@
-name: Unzip ZIP aus Repo-Root
+name: Unzip ZIP aus Repo-Root (und ins Repo schreiben)
 
 on:
   push:
@@ -6,13 +6,13 @@ on:
   workflow_dispatch:
     inputs:
       zip_name:
-        description: "ZIP-Dateiname im Repo-Root (optional; sonst erste *.zip)"
+        description: "ZIP-Dateiname im Repo-Root (leer = neueste *.zip)"
         required: false
         default: ""
       commit_changes:
         description: "Entpackte Dateien ins Repo committen? (true/false)"
         required: false
-        default: "false"
+        default: "true"
       delete_zip:
         description: "ZIP nach Entpacken löschen? (true/false)"
         required: false
@@ -23,57 +23,64 @@ permissions:
 
 jobs:
   unzip:
-    # verhindert Endlosschleife, falls du commit_changes=true nutzt
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
-    env:
-      ZIP_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.zip_name || '' }}
-      COMMIT_CHANGES: ${{ github.event_name == 'workflow_dispatch' && inputs.commit_changes || 'false' }}
-      DELETE_ZIP: ${{ github.event_name == 'workflow_dispatch' && inputs.delete_zip || 'false' }}
-
     steps:
-      - name: Checkout
+      - name: Checkout (inkl. LFS falls ZIP via LFS kommt)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          lfs: true
 
-      - name: Tools sicherstellen (unzip, rsync)
+      - name: Tools installieren
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y unzip rsync
 
-      - name: ZIP auswählen
+      - name: ZIP auswählen (Input oder neueste *.zip)
         id: pick
         run: |
           set -euo pipefail
 
+          echo "📁 Repo-Root Inhalt:"
+          ls -la
+
+          ZIP_INPUT="${{ github.event_name == 'workflow_dispatch' && inputs.zip_name || '' }}"
+
           if [[ -n "${ZIP_INPUT}" ]]; then
             if [[ ! -f "${ZIP_INPUT}" ]]; then
               echo "❌ ZIP '${ZIP_INPUT}' nicht gefunden im Repo-Root." >&2
-              echo "Repo-Root Inhalt:" >&2
-              ls -la >&2
               exit 1
             fi
             ZIP_FILE="${ZIP_INPUT}"
           else
-            ZIP_FILE="$(ls -1 *.zip 2>/dev/null | head -n 1 || true)"
+            ZIP_FILE="$(ls -t *.zip 2>/dev/null | head -n 1 || true)"
             if [[ -z "${ZIP_FILE}" ]]; then
               echo "❌ Keine *.zip im Repo-Root gefunden." >&2
-              echo "Repo-Root Inhalt:" >&2
-              ls -la >&2
               exit 1
             fi
           fi
 
           echo "✅ Verwende ZIP: ${ZIP_FILE}"
+          file "${ZIP_FILE}" || true
           echo "zip_file=${ZIP_FILE}" >> "$GITHUB_OUTPUT"
 
-      - name: Entpacken in Repo-Root (mit Auto-Flatten wenn 1 Top-Level-Ordner)
+      - name: ZIP validieren + Inhalt anzeigen
         run: |
           set -euo pipefail
+          ZIP_FILE="${{ steps.pick.outputs.zip_file }}"
 
+          echo "🧪 unzip -t (Test der ZIP):"
+          unzip -t "${ZIP_FILE}"
+
+          echo "📦 unzip -l (Listing):"
+          unzip -l "${ZIP_FILE}" | head -n 200
+
+      - name: Entpacken nach Temp + in Repo-Root mergen (Flatten wenn 1 Top-Level-Ordner)
+        run: |
+          set -euo pipefail
           ZIP_FILE="${{ steps.pick.outputs.zip_file }}"
           WORK="${RUNNER_TEMP}/unzip_work"
 
@@ -83,42 +90,49 @@ jobs:
           echo "📦 Entpacke '${ZIP_FILE}' nach '${WORK}'..."
           unzip -q -o "${ZIP_FILE}" -d "${WORK}"
 
-          echo "🔎 Inhalt nach Entpacken:"
+          echo "🔎 Top-Level nach Entpacken:"
           ls -la "${WORK}"
 
-          # Auto-Flatten: wenn genau 1 Top-Level-Ordner drin ist, dessen Inhalt ins Root mergen
           shopt -s dotglob nullglob
           entries=("${WORK}"/*)
 
           if [[ ${#entries[@]} -eq 1 && -d "${entries[0]}" ]]; then
             SRC="${entries[0]}"
-            echo "📁 ZIP hat genau 1 Top-Level-Ordner: $(basename "${SRC}") -> flatten + merge in Repo-Root"
+            echo "📁 Flatten: genau 1 Top-Level-Ordner -> $(basename "${SRC}")"
           else
             SRC="${WORK}"
-            echo "📁 ZIP hat mehrere Top-Level-Items -> merge in Repo-Root"
+            echo "📁 Mehrere Top-Level-Items -> direkt mergen"
           fi
 
-          # Merge in Repo-Root (überschreibt gleiche Dateien), schützt .git und Workflows
+          echo "➡️ Merge von '${SRC}/' nach Repo-Root './' (exclude nur .git)"
           rsync -a \
             --exclude ".git/" \
-            --exclude ".github/workflows/" \
             "${SRC}/" "./"
 
-          echo "✅ Merge abgeschlossen. Repo-Root jetzt:"
-          ls -la
+          echo "✅ Nach Merge: kurzer Überblick (maxdepth 3)"
+          find . -maxdepth 3 -type f | head -n 200
+
+          echo "🧾 Git Status:"
+          git status --porcelain || true
 
       - name: Optional ZIP löschen
-        if: env.DELETE_ZIP == 'true'
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.delete_zip == 'true' }}
         run: |
           set -euo pipefail
           ZIP_FILE="${{ steps.pick.outputs.zip_file }}"
           rm -f "${ZIP_FILE}"
           echo "🗑️ ZIP gelöscht: ${ZIP_FILE}"
 
-      - name: Optional commit + push der Änderungen
-        if: env.COMMIT_CHANGES == 'true'
+      - name: Commit + Push (push=immer, dispatch=nach Input)
+        env:
+          COMMIT_CHANGES: ${{ github.event_name == 'push' && 'true' || inputs.commit_changes }}
         run: |
           set -euo pipefail
+
+          if [[ "${COMMIT_CHANGES}" != "true" ]]; then
+            echo "ℹ️ commit_changes=false -> Entpacken war nur im Runner (Repo bleibt unverändert)."
+            exit 0
+          fi
 
           if git diff --quiet && git diff --cached --quiet; then
             echo "ℹ️ Keine Änderungen zum Commit."
@@ -131,4 +145,5 @@ jobs:
           git add -A
           git commit -m "Unzip archive into repository root [skip ci]"
           git push
+
           echo "✅ Änderungen committed & gepusht."
